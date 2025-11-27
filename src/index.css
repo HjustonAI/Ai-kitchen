@@ -3,16 +3,26 @@
 @tailwind utilities;
 
 body {
-  @apply bg-kitchen-bg text-white overflow-hidden;
+  @apply bg-kitchen-bg text-white overflow-hidden antialiased selection:bg-kitchen-accent/30 selection:text-kitchen-accent;
 }
 
-/* Custom scrollbar if needed */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  @apply bg-kitchen-panel;
+  @apply bg-transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-kitchen-accent/50 rounded;
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  @apply bg-kitchen-panel/80 backdrop-blur-xl border border-white/5 shadow-2xl;
+}
+
+.glass-block {
+  @apply bg-kitchen-panel/60 backdrop-blur-md border border-white/10 shadow-lg;
 }

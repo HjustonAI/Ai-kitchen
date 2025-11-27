@@ -6,15 +6,20 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
       colors: {
         kitchen: {
-          bg: '#121212',
-          board: '#1e1e1e',
-          panel: '#252525',
-          accent: '#c5a059', // Gold/Copper
+          bg: '#0a0a0a', // Darker, deeper black
+          board: '#121212',
+          panel: '#18181b', // Zinc-900ish
+          accent: '#d4af37', // Metallic Gold
           neon: {
             cyan: '#00f3ff',
             purple: '#bc13fe',
+            green: '#0aff60',
           }
         }
       }

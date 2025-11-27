@@ -39,3 +39,48 @@ A visual "kitchen board" for planning AI systems, built with React, TypeScript, 
 - Click a block to select it.
 - Click text fields to edit content.
 - Use "Wyczyść blat" to clear everything.
+
+## Generowanie Schematu z LLM
+
+Jeśli masz już opisany proces lub architekturę AI w innym czacie, możesz poprosić LLM o wygenerowanie pliku JSON, który zaimportujesz do AI Kitchen.
+
+Skopiuj i wklej poniższy prompt do swojego czatu z LLM (ChatGPT, Claude, etc.):
+
+> Jesteś architektem systemów AI. Przeanalizuj naszą dyskusję o architekturze/procesie i wygeneruj plik JSON reprezentujący ten system jako graf bloków i połączeń, gotowy do importu do narzędzia "AI Kitchen".
+>
+> Format wyjściowy musi być zgodny z następującym schematem JSON:
+>
+> ```json
+> {
+>   "blocks": [
+>     {
+>       "id": "string",
+>       "type": "chef" | "ingredients" | "dish" | "note",
+>       "title": "string",
+>       "description": "string",
+>       "x": number,
+>       "y": number
+>     }
+>   ],
+>   "connections": [
+>     {
+>       "id": "string",
+>       "fromId": "string",
+>       "toId": "string",
+>       "type": "default" | "flow" | "sync",
+>       "label": "string (optional)"
+>     }
+>   ]
+> }
+> ```
+>
+> **Instrukcje dotyczące typów:**
+> - `chef`: Agent AI, Model, Proces przetwarzania.
+> - `ingredients`: Dane wejściowe, Kontekst, Baza wiedzy, Prompt użytkownika.
+> - `dish`: Wynik końcowy, Odpowiedź, Wygenerowany plik.
+> - `note`: Dodatkowe uwagi, komentarze.
+>
+> **Instrukcje wizualne:**
+> - Rozmieść bloki w logicznym porządku (np. przepływ od lewej do prawej).
+> - Zachowaj odstępy (np. co 300-400 pikseli w osi X), aby graf był czytelny.
+> - Wygeneruj sam czysty JSON.
