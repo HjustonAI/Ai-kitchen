@@ -1,5 +1,5 @@
 import React, { memo, useRef } from 'react';
-import { ChefHat, Scroll, Utensils, StickyNote, Trash2, RotateCcw, Download, Upload, Image as ImageIcon, Layout, Wand2 } from 'lucide-react';
+import { ChefHat, Utensils, StickyNote, Trash2, RotateCcw, Download, Upload, Image as ImageIcon, Layout, Wand2, MousePointer2, BoxSelect, FileText, Keyboard } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
@@ -25,6 +25,7 @@ const SidebarButton = memo(({
     whileHover={{ scale: 1.02, x: 5 }}
     whileTap={{ scale: 0.98 }}
     onClick={onClick}
+    aria-label={label}
     className={cn(
       "flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left group relative overflow-hidden",
       "bg-white/5 border-white/5 hover:bg-white/10",
@@ -46,6 +47,8 @@ export const Sidebar: React.FC = memo(() => {
   const blocks = useStore((state) => state.blocks);
   const connections = useStore((state) => state.connections);
   const loadState = useStore((state) => state.loadState);
+  const selectionPriority = useStore((state) => state.selectionPriority);
+  const setSelectionPriority = useStore((state) => state.setSelectionPriority);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -115,11 +118,18 @@ export const Sidebar: React.FC = memo(() => {
           delay={0.1}
         />
         <SidebarButton 
-          icon={Scroll} 
-          label="Składniki" 
-          onClick={() => addBlock('ingredients')}
-          colorClass="text-gray-300 hover:border-white/30 hover:text-white"
+          icon={FileText} 
+          label="Kontekst" 
+          onClick={() => addBlock('context_file')}
+          colorClass="text-blue-300 hover:border-blue-300/50 hover:text-blue-100"
           delay={0.2}
+        />
+        <SidebarButton 
+          icon={Keyboard} 
+          label="Input" 
+          onClick={() => addBlock('input_file')}
+          colorClass="text-green-300 hover:border-green-300/50 hover:text-green-100"
+          delay={0.25}
         />
         <SidebarButton 
           icon={Utensils} 
@@ -146,11 +156,44 @@ export const Sidebar: React.FC = memo(() => {
       </div>
 
       <div className="mt-auto pt-6 border-t border-white/5 flex flex-col gap-2">
+        {/* Selection Priority Toggle */}
+        <div className="flex items-center justify-between bg-white/5 p-1 rounded-lg mb-2 border border-white/5">
+          <button
+            onClick={() => setSelectionPriority('block')}
+            aria-label="Preferuj wybór bloków"
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-all",
+              selectionPriority === 'block' 
+                ? "bg-white/10 text-white shadow-sm" 
+                : "text-white/40 hover:text-white/60"
+            )}
+            title="Preferuj wybór bloków"
+          >
+            <MousePointer2 size={14} />
+            <span>Bloki</span>
+          </button>
+          <button
+            onClick={() => setSelectionPriority('group')}
+            aria-label="Preferuj wybór grup"
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-all",
+              selectionPriority === 'group' 
+                ? "bg-white/10 text-white shadow-sm" 
+                : "text-white/40 hover:text-white/60"
+            )}
+            title="Preferuj wybór grup"
+          >
+            <BoxSelect size={14} />
+            <span>Grupy</span>
+          </button>
+        </div>
+
         <div className="grid grid-cols-3 gap-2 mb-2">
           <motion.button
             whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
             whileTap={{ scale: 0.95 }}
             onClick={handleExportJson}
+            aria-label="Eksportuj JSON"
             className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-all text-xs font-medium"
             title="Eksportuj JSON"
           >
@@ -162,6 +205,7 @@ export const Sidebar: React.FC = memo(() => {
             whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
             whileTap={{ scale: 0.95 }}
             onClick={handleImportClick}
+            aria-label="Importuj JSON"
             className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-all text-xs font-medium"
             title="Importuj JSON"
           >
@@ -173,6 +217,7 @@ export const Sidebar: React.FC = memo(() => {
             whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
             whileTap={{ scale: 0.95 }}
             onClick={handleExportPng}
+            aria-label="Eksportuj PNG"
             className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-all text-xs font-medium"
             title="Eksportuj PNG"
           >
@@ -185,6 +230,7 @@ export const Sidebar: React.FC = memo(() => {
           whileHover={{ scale: 1.02, backgroundColor: "rgba(255, 255, 255, 0.05)" }}
           whileTap={{ scale: 0.98 }}
           onClick={layoutBoard}
+          aria-label="Uporządkuj"
           className="flex items-center justify-center gap-2 p-3 w-full rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-all text-sm font-medium"
         >
           <Wand2 size={16} />
@@ -195,6 +241,7 @@ export const Sidebar: React.FC = memo(() => {
           whileHover={{ scale: 1.02, backgroundColor: "rgba(255, 255, 255, 0.05)" }}
           whileTap={{ scale: 0.98 }}
           onClick={() => updateView({ x: 0, y: 0, scale: 1 })}
+          aria-label="Resetuj widok"
           className="flex items-center justify-center gap-2 p-3 w-full rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-all text-sm font-medium"
         >
           <RotateCcw size={16} />
@@ -205,6 +252,7 @@ export const Sidebar: React.FC = memo(() => {
           whileHover={{ scale: 1.02, backgroundColor: "rgba(239, 68, 68, 0.1)" }}
           whileTap={{ scale: 0.98 }}
           onClick={clearBoard}
+          aria-label="Wyczyść blat"
           className="flex items-center justify-center gap-2 p-3 w-full rounded-lg border border-red-500/20 text-red-400/80 hover:text-red-400 hover:border-red-500/40 transition-all text-sm font-medium"
         >
           <Trash2 size={16} />

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, memo } from 'react';
 import Draggable from 'react-draggable';
-import { ChefHat, Scroll, Utensils, StickyNote, X, GripVertical } from 'lucide-react';
+import { ChefHat, Scroll, Utensils, StickyNote, X, GripVertical, ExternalLink, FileText, Keyboard } from 'lucide-react';
 import TextareaAutosize from 'react-textarea-autosize';
 import type { Block as BlockType } from '../types';
 import { cn } from '../lib/utils';
@@ -39,6 +39,7 @@ const BlockControls = ({ handlers, dark = false }: { handlers: BlockHandlers, da
       )}
       onMouseDown={handlers.onConnectStart}
       title="Drag to connect"
+      aria-label="Connect"
     >
       <div className="w-2 h-2 rounded-full border-2 border-current" />
     </button>
@@ -54,13 +55,41 @@ const BlockControls = ({ handlers, dark = false }: { handlers: BlockHandlers, da
         "p-1 rounded transition-all",
         dark ? "hover:bg-red-500/10 text-black/40 hover:text-red-600" : "hover:bg-red-500/20 text-white/40 hover:text-red-400"
       )}
+      aria-label="Delete"
     >
       <X size={14} />
     </button>
   </div>
 );
 
-const ChefBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
+const ChefBlock = ({ block, isSelected, handlers }: BlockComponentProps) => {
+  const connections = useStore((state) => state.connections);
+  const blocks = useStore((state) => state.blocks);
+  const setHoveredBlockId = useStore((state) => state.setHoveredBlockId);
+  const focusBlock = useStore((state) => state.focusBlock);
+
+  const ingredients = React.useMemo(() => {
+    return connections
+      .filter(c => c.toId === block.id)
+      .map(c => blocks.find(b => b.id === c.fromId))
+      .filter((b): b is BlockType => !!b && b.type === 'ingredients');
+  }, [connections, blocks, block.id]);
+
+  const contexts = React.useMemo(() => {
+    return connections
+      .filter(c => c.toId === block.id)
+      .map(c => blocks.find(b => b.id === c.fromId))
+      .filter((b): b is BlockType => !!b && b.type === 'context_file');
+  }, [connections, blocks, block.id]);
+
+  const inputs = React.useMemo(() => {
+    return connections
+      .filter(c => c.toId === block.id)
+      .map(c => blocks.find(b => b.id === c.fromId))
+      .filter((b): b is BlockType => !!b && b.type === 'input_file');
+  }, [connections, blocks, block.id]);
+
+  return (
   <div className={cn(
     "w-80 rounded-xl border-2 bg-slate-900/95 backdrop-blur-xl shadow-2xl transition-all duration-200 group",
     isSelected ? "border-kitchen-neon-cyan shadow-[0_0_30px_-5px_rgba(0,243,255,0.3)]" : "border-slate-700 hover:border-slate-600"
@@ -95,8 +124,93 @@ const ChefBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
         minRows={3}
       />
     </div>
+
+    {/* Connected Contexts (Ingredients) */}
+    {ingredients.length > 0 && (
+      <div className="px-3 pb-3">
+        <div className="text-[10px] font-mono text-slate-500 mb-1 uppercase tracking-wider flex items-center gap-2">
+          Data Sources <span className="bg-slate-800 text-slate-400 px-1 rounded text-[9px]">{ingredients.length}</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {ingredients.map(ing => (
+            <div 
+              key={ing.id}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-orange-500/5 border border-orange-500/10 text-[10px] text-orange-200/80 cursor-pointer hover:bg-orange-500/20 hover:border-orange-500/30 hover:text-orange-100 transition-all group/tag"
+              onMouseEnter={() => setHoveredBlockId(ing.id)}
+              onMouseLeave={() => setHoveredBlockId(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                focusBlock(ing.id);
+              }}
+              title={`Go to ${ing.title}`}
+            >
+              <Scroll size={10} className="text-orange-400" />
+              <span className="truncate max-w-[120px]">{ing.title}</span>
+              <ExternalLink size={8} className="opacity-0 group-hover/tag:opacity-50 transition-opacity" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* Connected Context Files */}
+    {contexts.length > 0 && (
+      <div className="px-3 pb-3">
+        <div className="text-[10px] font-mono text-slate-500 mb-1 uppercase tracking-wider flex items-center gap-2">
+          Context Files <span className="bg-slate-800 text-slate-400 px-1 rounded text-[9px]">{contexts.length}</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {contexts.map(ctx => (
+            <div 
+              key={ctx.id}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-500/5 border border-blue-500/10 text-[10px] text-blue-200/80 cursor-pointer hover:bg-blue-500/20 hover:border-blue-500/30 hover:text-blue-100 transition-all group/tag"
+              onMouseEnter={() => setHoveredBlockId(ctx.id)}
+              onMouseLeave={() => setHoveredBlockId(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                focusBlock(ctx.id);
+              }}
+              title={`Go to ${ctx.title}`}
+            >
+              <FileText size={10} className="text-blue-400" />
+              <span className="truncate max-w-[120px]">{ctx.title}</span>
+              <ExternalLink size={8} className="opacity-0 group-hover/tag:opacity-50 transition-opacity" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* Connected Input Files */}
+    {inputs.length > 0 && (
+      <div className="px-3 pb-3">
+        <div className="text-[10px] font-mono text-slate-500 mb-1 uppercase tracking-wider flex items-center gap-2">
+          Input Files <span className="bg-slate-800 text-slate-400 px-1 rounded text-[9px]">{inputs.length}</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {inputs.map(inp => (
+            <div 
+              key={inp.id}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-500/5 border border-green-500/10 text-[10px] text-green-200/80 cursor-pointer hover:bg-green-500/20 hover:border-green-500/30 hover:text-green-100 transition-all group/tag"
+              onMouseEnter={() => setHoveredBlockId(inp.id)}
+              onMouseLeave={() => setHoveredBlockId(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                focusBlock(inp.id);
+              }}
+              title={`Go to ${inp.title}`}
+            >
+              <Keyboard size={10} className="text-green-400" />
+              <span className="truncate max-w-[120px]">{inp.title}</span>
+              <ExternalLink size={8} className="opacity-0 group-hover/tag:opacity-50 transition-opacity" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
   </div>
-);
+  );
+};
 
 const IngredientsBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
   <div className={cn(
@@ -129,6 +243,82 @@ const IngredientsBlock = ({ block, isSelected, handlers }: BlockComponentProps) 
           onChange={(e) => handlers.onDescriptionChange(e.target.value)}
           onBlur={handlers.onDescriptionBlur}
           placeholder="Paste data or context..."
+          minRows={2}
+        />
+      </div>
+    </div>
+  </div>
+);
+
+const ContextFileBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
+  <div className={cn(
+    "w-64 rounded-lg border bg-slate-50/95 backdrop-blur-md shadow-lg transition-all duration-200 text-slate-800 group",
+    isSelected ? "border-blue-400 ring-2 ring-blue-400/20" : "border-slate-200 hover:border-slate-300"
+  )}>
+    <div className="h-1.5 w-full bg-blue-400 rounded-t-lg drag-handle" />
+    <div className="p-3">
+      <div className="flex items-start justify-between gap-2 mb-2 drag-handle">
+        <div className="flex items-center gap-2 text-blue-600">
+          <FileText size={16} />
+          <span className="text-xs font-bold uppercase tracking-wider">Context File</span>
+        </div>
+        <BlockControls handlers={handlers} dark={true} />
+      </div>
+      
+      <input
+        className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder-slate-400 mb-2"
+        value={block.title}
+        onChange={(e) => handlers.onTitleChange(e.target.value)}
+        onBlur={handlers.onTitleBlur}
+        placeholder="File Name"
+      />
+      
+      <div className="relative">
+        <div className="absolute left-0 top-2 bottom-0 w-0.5 bg-slate-200" />
+        <TextareaAutosize
+          className="w-full bg-transparent pl-3 text-sm text-slate-600 outline-none resize-none font-mono"
+          value={block.description}
+          onChange={(e) => handlers.onDescriptionChange(e.target.value)}
+          onBlur={handlers.onDescriptionBlur}
+          placeholder="Paste context content..."
+          minRows={2}
+        />
+      </div>
+    </div>
+  </div>
+);
+
+const InputFileBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
+  <div className={cn(
+    "w-64 rounded-lg border bg-slate-50/95 backdrop-blur-md shadow-lg transition-all duration-200 text-slate-800 group",
+    isSelected ? "border-green-400 ring-2 ring-green-400/20" : "border-slate-200 hover:border-slate-300"
+  )}>
+    <div className="h-1.5 w-full bg-green-400 rounded-t-lg drag-handle" />
+    <div className="p-3">
+      <div className="flex items-start justify-between gap-2 mb-2 drag-handle">
+        <div className="flex items-center gap-2 text-green-600">
+          <Keyboard size={16} />
+          <span className="text-xs font-bold uppercase tracking-wider">Input File</span>
+        </div>
+        <BlockControls handlers={handlers} dark={true} />
+      </div>
+      
+      <input
+        className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder-slate-400 mb-2"
+        value={block.title}
+        onChange={(e) => handlers.onTitleChange(e.target.value)}
+        onBlur={handlers.onTitleBlur}
+        placeholder="Input Name"
+      />
+      
+      <div className="relative">
+        <div className="absolute left-0 top-2 bottom-0 w-0.5 bg-slate-200" />
+        <TextareaAutosize
+          className="w-full bg-transparent pl-3 text-sm text-slate-600 outline-none resize-none font-mono"
+          value={block.description}
+          onChange={(e) => handlers.onDescriptionChange(e.target.value)}
+          onBlur={handlers.onDescriptionBlur}
+          placeholder="Paste input content..."
           minRows={2}
         />
       </div>
@@ -194,6 +384,40 @@ const NoteBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
   </div>
 );
 
+// --- Compact / Minimal Variants (LOD) ---
+
+const CompactBlockView = ({ block, isSelected }: BlockComponentProps) => {
+  const icon = block.type === 'chef' ? <ChefHat size={16} /> : block.type === 'ingredients' ? <Scroll size={16} /> : block.type === 'context_file' ? <FileText size={16} /> : block.type === 'input_file' ? <Keyboard size={16} /> : block.type === 'dish' ? <Utensils size={16} /> : <StickyNote size={16} />;
+  return (
+    <div className={cn(
+      "w-44 rounded-md p-2 flex items-center gap-2 drag-handle",
+      isSelected ? "ring-2 ring-kitchen-neon-cyan bg-slate-900/70" : "bg-slate-800/40 hover:bg-slate-800/60"
+    )}>
+      <div className="w-8 h-8 rounded flex items-center justify-center bg-black/20 text-white">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-semibold truncate">{block.title || 'Untitled'}</div>
+        <div className="text-xs text-slate-400 truncate">{block.type}</div>
+      </div>
+    </div>
+  );
+};
+
+const MinimalBlockView = ({ block, isSelected }: BlockComponentProps) => {
+  const bg = block.type === 'chef' ? 'bg-kitchen-neon-cyan/20' : block.type === 'ingredients' ? 'bg-orange-200/60' : block.type === 'context_file' ? 'bg-blue-200/60' : block.type === 'input_file' ? 'bg-green-200/60' : block.type === 'dish' ? 'bg-kitchen-neon-purple/20' : 'bg-yellow-200/60';
+  const icon = block.type === 'chef' ? <ChefHat size={12} /> : block.type === 'ingredients' ? <Scroll size={12} /> : block.type === 'context_file' ? <FileText size={12} /> : block.type === 'input_file' ? <Keyboard size={12} /> : block.type === 'dish' ? <Utensils size={12} /> : <StickyNote size={12} />;
+  return (
+    <div title={block.title || ''} className={cn(
+      "w-14 h-8 rounded-md flex items-center justify-center drag-handle",
+      bg,
+      isSelected ? 'ring-2 ring-kitchen-neon-cyan' : ''
+    )}>
+      <div className="text-xs text-slate-800">{icon}</div>
+    </div>
+  );
+};
+
 // --- Main Component ---
 
 export const Block: React.FC<BlockProps> = memo(({ block, scale }) => {
@@ -206,16 +430,47 @@ export const Block: React.FC<BlockProps> = memo(({ block, scale }) => {
   
   const selectedBlockIds = useStore((state) => state.selectedBlockIds);
   const isSelected = selectedBlockIds.includes(block.id);
-  
-  const highlightedBlockIds = useStore((state) => state.highlightedBlockIds);
-  
-  const isDimmed = highlightedBlockIds.length > 0 && !highlightedBlockIds.includes(block.id);
 
-  const nodeRef = useRef(null);
+  const highlightedBlockIds = useStore((state) => state.highlightedBlockIds);
+
+  const isHighlighted = highlightedBlockIds.length > 0 && highlightedBlockIds.includes(block.id);
+  const isDimmed = highlightedBlockIds.length > 0 && !isHighlighted;
+
+  const nodeRef = useRef<HTMLDivElement>(null);
 
   // Local state for inputs
   const [title, setTitle] = useState(block.title);
   const [description, setDescription] = useState(block.description);
+
+  // Measure size
+  useEffect(() => {
+    if (!nodeRef.current) return;
+    
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        // Use offsetWidth/Height from the element directly to get the layout size
+        // ResizeObserver entry gives contentRect, which might be different.
+        // But we want the size that connections should attach to.
+        // Since we are using Draggable, the ref is on the wrapper div.
+        // The wrapper div size is determined by its children.
+        
+        const el = entry.target as HTMLElement;
+        const width = el.offsetWidth;
+        const height = el.offsetHeight;
+
+        // Only update if changed significantly (ignore sub-pixel jitter)
+        if (Math.abs(width - (block.width || 0)) > 1 || Math.abs(height - (block.height || 0)) > 1) {
+          // We use a timeout to avoid "ResizeObserver loop limit exceeded" and to debounce
+          setTimeout(() => {
+             updateBlock(block.id, { width, height });
+          }, 0);
+        }
+      }
+    });
+    
+    observer.observe(nodeRef.current);
+    return () => observer.disconnect();
+  }, [block.id, block.width, block.height, updateBlock]);
 
   useEffect(() => {
     setTitle(block.title);
@@ -266,13 +521,23 @@ export const Block: React.FC<BlockProps> = memo(({ block, scale }) => {
     }
   };
 
-  // Render specific block type
+  // Render specific block type with Level-of-Detail (LOD)
   const renderBlockContent = () => {
     const props = { block: { ...block, title, description }, isSelected, handlers };
-    
+
+    // LOD thresholds: minimal (<0.3), compact (0.3 - 0.6), full (>=0.6)
+    if (scale < 0.3) {
+      return <MinimalBlockView {...props} />;
+    }
+    if (scale < 0.6) {
+      return <CompactBlockView {...props} />;
+    }
+
     switch (block.type) {
       case 'chef': return <ChefBlock {...props} />;
       case 'ingredients': return <IngredientsBlock {...props} />;
+      case 'context_file': return <ContextFileBlock {...props} />;
+      case 'input_file': return <InputFileBlock {...props} />;
       case 'dish': return <DishBlock {...props} />;
       case 'note': return <NoteBlock {...props} />;
       default: return <ChefBlock {...props} />;
@@ -303,15 +568,25 @@ export const Block: React.FC<BlockProps> = memo(({ block, scale }) => {
     >
       <div
         ref={nodeRef}
+        tabIndex={0}
+        aria-label={`${block.type} block: ${block.title}`}
         className={cn(
-          "absolute will-change-transform",
+          "absolute will-change-transform outline-none focus:ring-2 focus:ring-kitchen-neon-cyan/50 rounded-xl",
           !isDragging && "transition-all duration-200",
           isSelected ? "z-50" : "z-10 hover:z-40",
-          isDimmed && "opacity-20 blur-[1px] grayscale pointer-events-none"
+          isDimmed && "opacity-20 blur-[1px] grayscale pointer-events-none",
+          // subtle ring for highlighted (but not selected)
+          !isDimmed && !isSelected && isHighlighted && "ring-2 ring-kitchen-neon-cyan/40 shadow-[0_0_15px_rgba(0,243,255,0.15)] z-30"
         )}
         onClick={(e) => {
           e.stopPropagation();
           selectBlock(block.id, e.ctrlKey || e.metaKey);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.stopPropagation();
+            selectBlock(block.id, e.ctrlKey || e.metaKey);
+          }
         }}
         onMouseEnter={() => setHoveredBlockId(block.id)}
         onMouseLeave={() => setHoveredBlockId(null)}

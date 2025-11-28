@@ -1,4 +1,4 @@
-export type BlockType = 'chef' | 'ingredients' | 'dish' | 'note';
+export type BlockType = 'chef' | 'ingredients' | 'dish' | 'note' | 'context_file' | 'input_file';
 
 export type Block = {
   id: string;
@@ -7,6 +7,8 @@ export type Block = {
   description: string;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
 };
 
 export type Group = {
@@ -17,6 +19,7 @@ export type Group = {
   width: number;
   height: number;
   color: string;
+  collapsed?: boolean;
 };
 
 export type ConnectionType = 'default' | 'flow' | 'sync';

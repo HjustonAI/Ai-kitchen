@@ -1,4 +1,76 @@
 {
+  "groups": [
+    {
+      "id": "g_system",
+      "title": "System Overview",
+      "x": -50,
+      "y": -150,
+      "width": 1400,
+      "height": 500,
+      "color": "blue",
+      "collapsed": false
+    },
+    {
+      "id": "g_contexts",
+      "title": "Contexts & Knowledge",
+      "x": -350,
+      "y": 250,
+      "width": 300,
+      "height": 800,
+      "color": "purple",
+      "collapsed": false
+    },
+    {
+      "id": "g_chatmodes",
+      "title": "Chat Modes",
+      "x": -50,
+      "y": 650,
+      "width": 1000,
+      "height": 300,
+      "color": "green",
+      "collapsed": false
+    },
+    {
+      "id": "g_sc1",
+      "title": "Scenario 1: Nowa Kampania",
+      "x": -50,
+      "y": 1050,
+      "width": 1700,
+      "height": 300,
+      "color": "orange",
+      "collapsed": false
+    },
+    {
+      "id": "g_sc2",
+      "title": "Scenario 2: Kontent Kampanii",
+      "x": -50,
+      "y": 1450,
+      "width": 1400,
+      "height": 300,
+      "color": "pink",
+      "collapsed": false
+    },
+    {
+      "id": "g_sc3",
+      "title": "Scenario 3: Always On Formats",
+      "x": -50,
+      "y": 1850,
+      "width": 1000,
+      "height": 300,
+      "color": "cyan",
+      "collapsed": false
+    },
+    {
+      "id": "g_sc4",
+      "title": "Scenario 4: Kalendarz Miesięczny",
+      "x": -50,
+      "y": 2250,
+      "width": 1000,
+      "height": 300,
+      "color": "yellow",
+      "collapsed": false
+    }
+  ],
   "blocks": [
     {
       "id": "sys_header",
@@ -10,7 +82,7 @@
     },
     {
       "id": "sys_user",
-      "type": "ingredients",
+      "type": "input_file",
       "title": "User Intent",
       "description": "Polecenie startowe",
       "x": 0,
@@ -18,7 +90,7 @@
     },
     {
       "id": "ctx_branding",
-      "type": "ingredients",
+      "type": "context_file",
       "title": "zaspani_branding.md",
       "description": "Brand Voice & Identity",
       "x": -300,
@@ -26,7 +98,7 @@
     },
     {
       "id": "ctx_personas",
-      "type": "ingredients",
+      "type": "context_file",
       "title": "zaspani_personas.md",
       "description": "Audience Profiles",
       "x": -300,
@@ -34,7 +106,7 @@
     },
     {
       "id": "ctx_strategy",
-      "type": "ingredients",
+      "type": "context_file",
       "title": "zaspani_core_strategy.md",
       "description": "Core Strategy",
       "x": -300,
@@ -42,7 +114,7 @@
     },
     {
       "id": "ctx_copy",
-      "type": "ingredients",
+      "type": "context_file",
       "title": "zaspani_copy_notes.md",
       "description": "Copywriting Patterns",
       "x": -300,
@@ -50,7 +122,7 @@
     },
     {
       "id": "ctx_graphics",
-      "type": "ingredients",
+      "type": "context_file",
       "title": "zaspani_graphics.md",
       "description": "Visual Guidelines",
       "x": -300,
@@ -58,7 +130,7 @@
     },
     {
       "id": "ctx_formats",
-      "type": "ingredients",
+      "type": "context_file",
       "title": "zaspani_always_on_formats.md",
       "description": "Format Library",
       "x": -300,
@@ -66,7 +138,7 @@
     },
     {
       "id": "ctx_checklists",
-      "type": "ingredients",
+      "type": "context_file",
       "title": "event_checklists.md",
       "description": "Ops Checklists",
       "x": -300,
@@ -138,7 +210,7 @@
     },
     {
       "id": "sc1_start",
-      "type": "ingredients",
+      "type": "input_file",
       "title": "Start Inputs",
       "description": "Name, Date, Venue, Price, Format, Audience, Ideas, Constraints",
       "x": 0,
@@ -194,7 +266,7 @@
     },
     {
       "id": "sc2_start",
-      "type": "ingredients",
+      "type": "input_file",
       "title": "Inputs & Contexts",
       "description": "Inputs: Name, Date, Folder Path. + Campaign Files (Brief, Big Idea)",
       "x": 0,
@@ -234,7 +306,7 @@
     },
     {
       "id": "sc3_start",
-      "type": "ingredients",
+      "type": "input_file",
       "title": "Inputs & Contexts",
       "description": "Inputs: Goal, Channels, Mix, Frequency.",
       "x": 0,
@@ -266,7 +338,7 @@
     },
     {
       "id": "sc4_start",
-      "type": "ingredients",
+      "type": "input_file",
       "title": "Inputs & Contexts",
       "description": "Inputs: Month/Year, Frequency, Channels, Formats, Events.",
       "x": 0,

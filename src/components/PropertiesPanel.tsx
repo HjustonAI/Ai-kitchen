@@ -48,6 +48,7 @@ export const PropertiesPanel: React.FC = () => {
           </h3>
           <button
             onClick={() => selectConnection(null)}
+            aria-label="Close properties panel"
             className="p-1 hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors"
           >
             <X size={14} />
@@ -65,6 +66,7 @@ export const PropertiesPanel: React.FC = () => {
                 <button
                   key={type}
                   onClick={() => updateConnection(connection.id, { type })}
+                  aria-label={`Set connection type to ${type}`}
                   className={`
                     px-2 py-2 rounded-lg text-xs font-medium transition-all border
                     ${connection.type === type 

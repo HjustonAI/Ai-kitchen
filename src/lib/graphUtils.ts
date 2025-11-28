@@ -2,7 +2,7 @@ import type { Block, Connection } from '../types';
 
 export const getConnectedElements = (
   startNodeId: string,
-  blocks: Block[],
+  _blocks: Block[],
   connections: Connection[]
 ) => {
   const connectedBlockIds = new Set<string>();

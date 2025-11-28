@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 
 interface BoardProps {
   children: React.ReactNode;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   view: { x: number; y: number; scale: number };
   onMouseDown: (e: React.MouseEvent) => void;
   onMouseMove: (e: React.MouseEvent) => void;
@@ -29,7 +29,7 @@ export const Board: React.FC<BoardProps> = ({
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
       onWheel={onWheel}
-      onClick={onClick}
+      onClick={(e) => onClick(e)}
     >
       {/* Animated Grid Background */}
       <div 

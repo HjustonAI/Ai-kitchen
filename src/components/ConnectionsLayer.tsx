@@ -6,7 +6,18 @@ import { cn } from '../lib/utils';
 
 interface ConnectionsLayerProps {}
 
-const getBlockDimensions = (type: BlockType) => {
+const getBlockDimensions = (type: BlockType, scale: number) => {
+  // Map LOD sizes to approximate pixel dimensions so connection anchors remain centered.
+  if (scale < 0.3) {
+    // Minimal: small tile
+    return { width: 56, height: 32 };
+  }
+  if (scale < 0.6) {
+    // Compact: unified compact width
+    if (type === 'note') return { width: 176, height: 176 };
+    return { width: 176, height: 48 };
+  }
+
   switch (type) {
     case 'chef': return { width: 320, height: 180 }; // w-80
     case 'ingredients': return { width: 256, height: 160 }; // w-64
@@ -16,34 +27,48 @@ const getBlockDimensions = (type: BlockType) => {
   }
 };
 
-const getBlockCenter = (block: Block, draggingBlockId: string | null, draggingPos: { x: number; y: number } | null) => {
-  const dims = getBlockDimensions(block.type);
-  
-  if (block.id === draggingBlockId && draggingPos) {
-    return {
-      x: draggingPos.x + dims.width / 2,
-      y: draggingPos.y + dims.height / 2,
-    };
+const getBlockCenter = (block: Block, draggingBlockId: string | null, draggingPos: { x: number; y: number } | null, scale: number) => {
+  let width, height;
+
+  // Use measured dimensions if available, otherwise fallback to estimated dimensions
+  if (block.width && block.height) {
+    width = block.width;
+    height = block.height;
+  } else {
+    const dims = getBlockDimensions(block.type, scale);
+    width = dims.width;
+    height = dims.height;
   }
+  
+  let x = block.x;
+  let y = block.y;
+
+  if (block.id === draggingBlockId && draggingPos) {
+    x = draggingPos.x;
+    y = draggingPos.y;
+  }
+  
   return {
-    x: block.x + dims.width / 2,
-    y: block.y + dims.height / 2,
+    x: x + width / 2,
+    y: y + height / 2,
   };
 };
 
-const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, draggingBlockId, draggingPos }: { 
+const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, isHighlighted, draggingBlockId, draggingPos, scale }: { 
   conn: Connection, 
   fromBlock: Block, 
   toBlock: Block, 
   isSelected: boolean,
   isDimmed: boolean,
+  isHighlighted: boolean,
   draggingBlockId: string | null,
-  draggingPos: { x: number; y: number } | null
+  draggingPos: { x: number; y: number } | null,
+  scale: number
 }) => {
   const selectConnection = useStore((state) => state.selectConnection);
   
-  const start = getBlockCenter(fromBlock, draggingBlockId, draggingPos);
-  const end = getBlockCenter(toBlock, draggingBlockId, draggingPos);
+  const start = getBlockCenter(fromBlock, draggingBlockId, draggingPos, scale);
+  const end = getBlockCenter(toBlock, draggingBlockId, draggingPos, scale);
 
   const isFlow = conn.type === 'flow';
   const isSync = conn.type === 'sync';
@@ -52,8 +77,9 @@ const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, d
   if (isSelected) color = '#ffffff';
   else if (isFlow) color = '#00f3ff';
   else if (isSync) color = '#a855f7';
+  else if (isHighlighted) color = '#60a5fa';
 
-  const width = isSelected ? 3 : (isFlow || isSync ? 2 : 1.5);
+  const width = isSelected ? 3 : (isHighlighted ? 2.5 : (isFlow || isSync ? 2 : 1.5));
   const markerId = isSelected ? 'arrowhead-selected' : (isFlow ? 'arrowhead-flow' : 'arrowhead');
 
   // Calculate control points for Bezier curve
@@ -115,6 +141,7 @@ const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, d
 
 export const ConnectionsLayer: React.FC<ConnectionsLayerProps> = () => {
   const blocks = useStore((state) => state.blocks);
+  const groups = useStore((state) => state.groups);
   const connections = useStore((state) => state.connections);
   const connectingSourceId = useStore((state) => state.connectingSourceId);
   const tempConnectionPos = useStore((state) => state.tempConnectionPos);
@@ -122,11 +149,41 @@ export const ConnectionsLayer: React.FC<ConnectionsLayerProps> = () => {
   const highlightedConnectionIds = useStore((state) => state.highlightedConnectionIds);
   const draggingBlockId = useStore((state) => state.draggingBlockId);
   const draggingPos = useStore((state) => state.draggingPos);
+  const scale = useStore((state) => state.view.scale);
+  const hoveredBlockId = useStore((state) => state.hoveredBlockId);
+  const selectedBlockIds = useStore((state) => state.selectedBlockIds);
 
   // Optimize block lookup
   const blockMap = React.useMemo(() => {
     return new Map(blocks.map(b => [b.id, b]));
   }, [blocks]);
+
+  const getEffectiveBlock = (blockId: string): Block | null => {
+    const block = blockMap.get(blockId);
+    if (!block) return null;
+
+    // Check if block is in a collapsed group
+    const collapsedGroup = groups.find(g => 
+      g.collapsed && 
+      (block.x + (block.width || 0)/2) >= g.x && 
+      (block.x + (block.width || 0)/2) <= g.x + g.width &&
+      (block.y + (block.height || 0)/2) >= g.y && 
+      (block.y + (block.height || 0)/2) <= g.y + g.height
+    );
+
+    if (collapsedGroup) {
+      return {
+        ...block,
+        id: collapsedGroup.id, // Use group ID to identify the node
+        x: collapsedGroup.x,
+        y: collapsedGroup.y,
+        width: 300,
+        height: 60,
+      };
+    }
+
+    return block;
+  };
 
   const tempConnection = connectingSourceId && tempConnectionPos ? {
     fromId: connectingSourceId,
@@ -170,11 +227,47 @@ export const ConnectionsLayer: React.FC<ConnectionsLayerProps> = () => {
       </defs>
 
       {connections.map(conn => {
-        const fromBlock = blockMap.get(conn.fromId);
-        const toBlock = blockMap.get(conn.toId);
+        const fromBlock = getEffectiveBlock(conn.fromId);
+        const toBlock = getEffectiveBlock(conn.toId);
+        
         if (!fromBlock || !toBlock) return null;
+        
+        // Don't render connections that are internal to a collapsed group
+        if (fromBlock.id === toBlock.id) return null;
+
+        // Smart Visualization: Hide "Ingredient -> Chef" connections to reduce clutter
+        // Only show them if:
+        // 1. The connection itself is selected
+        // 2. The source (Ingredient) is selected or hovered
+        // 3. The target (Chef) is selected or hovered
+        const isIngredientToChef = fromBlock.type === 'ingredients' && toBlock.type === 'chef';
+        
+        if (isIngredientToChef) {
+          const isSelected = selectedConnectionId === conn.id;
+          
+          // Check if source/target are active (selected or hovered)
+          // We check both the effective block ID (which might be a group) and the original connection ID
+          // This ensures that hovering a "Context Tag" (which sets hoveredId to the original ingredient ID)
+          // still triggers the line visibility even if the ingredient is inside a collapsed group.
+          const isFromActive = 
+            selectedBlockIds.includes(fromBlock.id) || 
+            hoveredBlockId === fromBlock.id || 
+            hoveredBlockId === conn.fromId ||
+            selectedBlockIds.includes(conn.fromId);
+
+          const isToActive = 
+            selectedBlockIds.includes(toBlock.id) || 
+            hoveredBlockId === toBlock.id || 
+            hoveredBlockId === conn.toId ||
+            selectedBlockIds.includes(conn.toId);
+          
+          if (!isSelected && !isFromActive && !isToActive) {
+            return null;
+          }
+        }
 
         const isDimmed = highlightedConnectionIds.length > 0 && !highlightedConnectionIds.includes(conn.id);
+        const isHighlighted = highlightedConnectionIds.includes(conn.id);
 
         return (
           <ConnectionLine 
@@ -184,16 +277,18 @@ export const ConnectionsLayer: React.FC<ConnectionsLayerProps> = () => {
             toBlock={toBlock} 
             isSelected={selectedConnectionId === conn.id}
             isDimmed={isDimmed}
+            isHighlighted={isHighlighted}
             draggingBlockId={draggingBlockId}
             draggingPos={draggingPos}
+            scale={scale}
           />
         );
       })}
 
       {tempConnection && (() => {
-        const fromBlock = blockMap.get(tempConnection.fromId);
+        const fromBlock = getEffectiveBlock(tempConnection.fromId);
         if (!fromBlock) return null;
-        const start = getBlockCenter(fromBlock, draggingBlockId, draggingPos);
+        const start = getBlockCenter(fromBlock, draggingBlockId, draggingPos, scale);
         
         return (
           <path

@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import type { BlockType } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Board } from './components/Board';
 import { BottomBar } from './components/BottomBar';
 import { Block } from './components/Block';
 import { Group } from './components/Group';
 import { ConnectionsLayer } from './components/ConnectionsLayer';
+import ExecutionLayer from './components/ExecutionLayer';
 import { PropertiesPanel } from './components/PropertiesPanel';
+import { ContextPanel } from './components/ContextPanel';
 import { useStore } from './store/useStore';
+import { getBlockDimensions } from './lib/utils';
 
 function App() {
   // Global State
@@ -19,6 +23,7 @@ function App() {
   const view = useStore((state) => state.view);
   const connectingSourceId = useStore((state) => state.connectingSourceId);
   const hoveredBlockId = useStore((state) => state.hoveredBlockId);
+  const selectionPriority = useStore((state) => state.selectionPriority);
 
   // Actions
   const deleteBlock = useStore((state) => state.deleteBlock);
@@ -180,6 +185,83 @@ function App() {
     }
   }, [connectingSourceId, hoveredBlockId, connections, addConnection, setConnectingSourceId, setTempConnectionPos]);
 
+  // Handle clicks bubbled from the Board. Uses canvas coordinates to hit-test groups and contained blocks.
+  const handleBoardClick = useCallback((e: React.MouseEvent) => {
+    const boardRect = (e.currentTarget as Element).getBoundingClientRect();
+    const rawX = e.clientX - boardRect.left;
+    const rawY = e.clientY - boardRect.top;
+
+    const canvasX = (rawX - view.x) / view.scale;
+    const canvasY = (rawY - view.y) / view.scale;
+
+    // If click is inside a group, prefer selecting a block inside that group (nearest or directly under cursor)
+    const clickedGroup = groups.slice().reverse().find((g) => {
+      const width = g.collapsed ? 300 : g.width;
+      const height = g.collapsed ? 60 : g.height;
+      return canvasX >= g.x && canvasX <= g.x + width && canvasY >= g.y && canvasY <= g.y + height;
+    });
+
+    if (clickedGroup) {
+      // If selection priority is 'group', select the group immediately and stop
+      if (selectionPriority === 'group') {
+        selectGroup(clickedGroup.id);
+        return;
+      }
+
+      // Find blocks that overlap the group's rect
+      const blocksInGroup = blocks.filter((b) => {
+        const dims = getBlockDimensions(b.type as BlockType, view.scale);
+        const width = b.width || dims.width;
+        const height = b.height || dims.height;
+        const left = b.x;
+        const top = b.y;
+        const right = b.x + width;
+        const bottom = b.y + height;
+
+        return !(right < clickedGroup.x || left > clickedGroup.x + clickedGroup.width || bottom < clickedGroup.y || top > clickedGroup.y + clickedGroup.height);
+      });
+
+      if (blocksInGroup.length > 0) {
+        // Try to find a block directly under the cursor first
+        let target = blocksInGroup.find((b) => {
+          const dims = getBlockDimensions(b.type as BlockType, view.scale);
+          const width = b.width || dims.width;
+          const height = b.height || dims.height;
+          return canvasX >= b.x && canvasX <= b.x + width && canvasY >= b.y && canvasY <= b.y + height;
+        });
+
+        // If none directly under cursor, pick nearest block center
+        if (!target) {
+          let best: { dist: number; block: typeof blocks[0] | null } = { dist: Infinity, block: null };
+          for (const b of blocksInGroup) {
+            const dims = getBlockDimensions(b.type as BlockType, view.scale);
+            const width = b.width || dims.width;
+            const height = b.height || dims.height;
+            const cx = b.x + width / 2;
+            const cy = b.y + height / 2;
+            const d = (canvasX - cx) ** 2 + (canvasY - cy) ** 2;
+            if (d < best.dist) best = { dist: d, block: b };
+          }
+          target = best.block || undefined;
+        }
+
+        if (target) {
+          selectBlock(target.id, e.ctrlKey || e.metaKey);
+          return;
+        }
+      }
+
+      // If no blocks were selected, fallback to selecting the group
+      selectGroup(clickedGroup.id);
+      return;
+    }
+
+    // Default background click: clear selections
+    selectBlock(null);
+    selectGroup(null);
+    selectConnection(null);
+  }, [view, groups, blocks, selectBlock, selectGroup, selectConnection, selectionPriority]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -224,11 +306,7 @@ function App() {
         onMouseDown={handleMouseDown}
       >
         <Board 
-          onClick={() => {
-            selectBlock(null);
-            selectGroup(null);
-            selectConnection(null);
-          }}
+          onClick={handleBoardClick}
           view={view}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -243,6 +321,7 @@ function App() {
             />
           ))}
           <ConnectionsLayer />
+          <ExecutionLayer />
           {blocks.map(block => (
             <Block
               key={block.id}
@@ -254,6 +333,7 @@ function App() {
         
         <BottomBar prompt={prompt} setPrompt={setPrompt} />
         <PropertiesPanel />
+        <ContextPanel />
       </div>
     </div>
   );

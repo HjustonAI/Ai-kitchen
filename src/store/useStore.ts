@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
 import { getLayoutedElements } from '../lib/layoutUtils';
 import { getConnectedElements } from '../lib/graphUtils';
+import { getBlockDimensions } from '../lib/utils';
 import type { Block, BlockType, Connection, Group } from '../types';
 
 interface ViewState {
@@ -30,17 +31,21 @@ interface AppState {
   draggingBlockId: string | null;
   draggingPos: { x: number; y: number } | null;
   
+  selectionPriority: 'group' | 'block';
+
   // Actions
   addBlock: (type: BlockType) => void;
   updateBlock: (id: string, updates: Partial<Block>) => void;
   deleteBlock: (id: string) => void;
   selectBlock: (id: string | null, multi?: boolean) => void;
   setDraggingBlock: (id: string | null, pos: { x: number; y: number } | null) => void;
+  setSelectionPriority: (priority: 'group' | 'block') => void;
 
   addGroup: () => void;
   updateGroup: (id: string, updates: Partial<Group>) => void;
   deleteGroup: (id: string) => void;
   selectGroup: (id: string | null) => void;
+  toggleGroupCollapse: (id: string) => void;
   
   addConnection: (fromId: string, toId: string) => void;
   updateConnection: (id: string, updates: Partial<Connection>) => void;
@@ -51,9 +56,10 @@ interface AppState {
   setTempConnectionPos: (pos: { x: number; y: number } | null) => void;
   
   updateView: (updates: Partial<ViewState>) => void;
+  focusBlock: (id: string) => void;
   clearBoard: () => void;
   layoutBoard: () => void;
-  loadState: (data: { blocks: Block[], connections: Connection[] }) => void;
+  loadState: (data: { blocks: Block[], connections: Connection[], groups?: Group[] }) => void;
 }
 
 // Helper to calculate highlights based on current selection
@@ -96,6 +102,7 @@ export const useStore = create<AppState>()(
         tempConnectionPos: null,
         draggingBlockId: null,
         draggingPos: null,
+        selectionPriority: 'block',
 
         addBlock: (type) => {
           const { view } = get();
@@ -106,7 +113,7 @@ export const useStore = create<AppState>()(
           const newBlock: Block = {
             id: crypto.randomUUID(),
             type,
-            title: type === 'chef' ? 'Agent' : type === 'ingredients' ? 'Dane' : type === 'dish' ? 'Wynik' : 'Notatka',
+            title: type === 'chef' ? 'Agent' : type === 'ingredients' ? 'Dane' : type === 'dish' ? 'Wynik' : type === 'note' ? 'Notatka' : type === 'context_file' ? 'Kontekst' : 'Input',
             description: '',
             x: centerX - 144 + (Math.random() * 50 - 25),
             y: centerY - 100 + (Math.random() * 50 - 25),
@@ -193,6 +200,7 @@ export const useStore = create<AppState>()(
         },
 
         setDraggingBlock: (id, pos) => set({ draggingBlockId: id, draggingPos: pos }),
+        setSelectionPriority: (priority) => set({ selectionPriority: priority }),
 
         addGroup: () => {
           const { view } = get();
@@ -231,14 +239,40 @@ export const useStore = create<AppState>()(
         },
 
         selectGroup: (id) => {
+          const { groups, blocks } = get();
+          const group = groups.find(g => g.id === id);
+          let highlightedBlockIds: string[] = [];
+
+          if (group) {
+            // Find blocks inside the group to highlight them
+            highlightedBlockIds = blocks.filter(b => {
+              const dims = getBlockDimensions(b.type, 1);
+              const bCenterX = b.x + dims.width / 2;
+              const bCenterY = b.y + dims.height / 2;
+              
+              return (
+                bCenterX >= group.x &&
+                bCenterX <= group.x + group.width &&
+                bCenterY >= group.y &&
+                bCenterY <= group.y + group.height
+              );
+            }).map(b => b.id);
+          }
+
           set({ 
             selectedGroupId: id, 
             selectedId: null, 
             selectedBlockIds: [], 
             selectedConnectionId: null,
-            highlightedBlockIds: [],
+            highlightedBlockIds,
             highlightedConnectionIds: []
           });
+        },
+
+        toggleGroupCollapse: (id) => {
+          set((state) => ({
+            groups: state.groups.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)),
+          }));
         },
 
         addConnection: (fromId, toId) => {
@@ -303,6 +337,28 @@ export const useStore = create<AppState>()(
 
         updateView: (updates) => set((state) => ({ view: { ...state.view, ...updates } })),
 
+        focusBlock: (id) => {
+          const { blocks, view } = get();
+          const block = blocks.find((b) => b.id === id);
+          if (block) {
+            const dims = getBlockDimensions(block.type, view.scale);
+            const blockCenterX = block.x + dims.width / 2;
+            const blockCenterY = block.y + dims.height / 2;
+
+            // Center the view on the block
+            // view.x + blockCenterX * view.scale = window.innerWidth / 2
+            // view.x = window.innerWidth / 2 - blockCenterX * view.scale
+            
+            const newX = window.innerWidth / 2 - blockCenterX * view.scale;
+            const newY = window.innerHeight / 2 - blockCenterY * view.scale;
+
+            set({ view: { ...view, x: newX, y: newY } });
+            
+            // Also select the block
+            get().selectBlock(id);
+          }
+        },
+
         clearBoard: () => set({ 
           blocks: [], 
           groups: [], 
@@ -316,15 +372,15 @@ export const useStore = create<AppState>()(
         }),
         
         layoutBoard: () => {
-          const { blocks, connections } = get();
-          const layoutedBlocks = getLayoutedElements(blocks, connections, 'LR');
-          set({ blocks: layoutedBlocks });
+          const { blocks, connections, groups } = get();
+          const { layoutedBlocks, layoutedGroups } = getLayoutedElements(blocks, groups, connections, 'LR');
+          set({ blocks: layoutedBlocks, groups: layoutedGroups });
         },
 
         loadState: (data) => set({ 
           blocks: data.blocks, 
           connections: data.connections,
-          groups: [], // TODO: Add groups to export/import
+          groups: data.groups || [],
           selectedId: null,
           selectedBlockIds: [],
           selectedGroupId: null,
@@ -340,6 +396,7 @@ export const useStore = create<AppState>()(
           groups: state.groups,
           connections: state.connections,
           view: state.view,
+          selectionPriority: state.selectionPriority,
         }),
       }
     ),

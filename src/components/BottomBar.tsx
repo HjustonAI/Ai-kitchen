@@ -1,7 +1,8 @@
 import React, { memo, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, Check, Undo2, Redo2, LayoutGrid } from 'lucide-react';
+import { Copy, Check, Undo2, Redo2, LayoutGrid, Play, Pause, Zap, Trash2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useExecutionStore } from '../store/useExecutionStore';
 
 interface BottomBarProps {
   prompt: string;
@@ -34,6 +35,22 @@ export const BottomBar: React.FC<BottomBarProps> = memo(({ prompt, setPrompt }) 
   const handleUndo = () => useStore.temporal?.getState().undo();
   const handleRedo = () => useStore.temporal?.getState().redo();
   const layoutBoard = useStore((state) => state.layoutBoard);
+  const connections = useStore((state) => state.connections);
+
+  // Execution Store
+  const isRunning = useExecutionStore((state) => state.isRunning);
+  const setIsRunning = useExecutionStore((state) => state.setIsRunning);
+  const addPacket = useExecutionStore((state) => state.addPacket);
+  const clearExecution = useExecutionStore((state) => state.clearExecution);
+
+  const handleToggleRun = () => setIsRunning(!isRunning);
+  
+  const handleSpawnPacket = () => {
+    if (connections.length === 0) return;
+    const randomConn = connections[Math.floor(Math.random() * connections.length)];
+    addPacket(randomConn.id);
+    if (!isRunning) setIsRunning(true);
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(prompt);
@@ -47,11 +64,42 @@ export const BottomBar: React.FC<BottomBarProps> = memo(({ prompt, setPrompt }) 
       animate={{ y: 0 }}
       className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl z-50 flex gap-4"
     >
+      {/* Simulation Controls */}
+      <div className="glass-panel rounded-2xl p-2 flex items-center gap-1 shadow-2xl ring-1 ring-white/10">
+        <button
+          onClick={handleToggleRun}
+          aria-label={isRunning ? "Pauza" : "Start Symulacji"}
+          className={`p-3 rounded-xl transition-colors ${isRunning ? 'bg-kitchen-neon-cyan/20 text-kitchen-neon-cyan hover:bg-kitchen-neon-cyan/30' : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'}`}
+          title={isRunning ? "Pauza" : "Start Symulacji"}
+        >
+          {isRunning ? <Pause size={18} /> : <Play size={18} />}
+        </button>
+        <button
+          onClick={handleSpawnPacket}
+          disabled={connections.length === 0}
+          aria-label="Wyślij pakiet"
+          className="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Wyślij pakiet (Spawn Packet)"
+        >
+          <Zap size={18} />
+        </button>
+        <div className="w-[1px] h-6 bg-white/10 mx-1" />
+        <button
+          onClick={clearExecution}
+          aria-label="Wyczyść symulację"
+          className="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+          title="Wyczyść symulację"
+        >
+          <Trash2 size={18} />
+        </button>
+      </div>
+
       {/* Undo/Redo Controls */}
       <div className="glass-panel rounded-2xl p-2 flex items-center gap-1 shadow-2xl ring-1 ring-white/10">
         <button
           onClick={handleUndo}
           disabled={!canUndo}
+          aria-label="Cofnij"
           className="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           title="Cofnij (Ctrl+Z)"
         >
@@ -60,6 +108,7 @@ export const BottomBar: React.FC<BottomBarProps> = memo(({ prompt, setPrompt }) 
         <button
           onClick={handleRedo}
           disabled={!canRedo}
+          aria-label="Ponów"
           className="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           title="Ponów (Ctrl+Shift+Z)"
         >
@@ -68,6 +117,7 @@ export const BottomBar: React.FC<BottomBarProps> = memo(({ prompt, setPrompt }) 
         <div className="w-[1px] h-6 bg-white/10 mx-1" />
         <button
           onClick={layoutBoard}
+          aria-label="Uporządkuj"
           className="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
           title="Uporządkuj (Auto-Layout)"
         >
@@ -86,6 +136,7 @@ export const BottomBar: React.FC<BottomBarProps> = memo(({ prompt, setPrompt }) 
           type="text"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
+          aria-label="Prompt Dnia"
           className="flex-1 bg-transparent border-none text-white focus:ring-0 placeholder-white/20 font-mono text-sm"
           placeholder="Wpisz główny cel lub prompt..."
         />
@@ -94,6 +145,7 @@ export const BottomBar: React.FC<BottomBarProps> = memo(({ prompt, setPrompt }) 
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={handleCopy}
+          aria-label="Kopiuj prompt"
           className="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
           title="Kopiuj prompt"
         >
