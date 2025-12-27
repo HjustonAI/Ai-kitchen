@@ -23,11 +23,11 @@ A visual node-based editor for designing and simulating AI agent workflows. Plan
 ### 🤖 Block Types
 | Type | Icon | Purpose |
 |------|------|---------|
-| **Chef** | 👨‍🍳 | AI Agent / LLM processor |
+| **Chef** | 👨‍🍳 | AI Agent / LLM processor with output files |
 | **Ingredients** | 🥕 | Raw data / Resources |
 | **Context File** | 📄 | Static reference documents |
 | **Input File** | 📥 | Dynamic user inputs |
-| **Dish** | 🍽️ | Output / Results |
+| **Dish** | 📁 | Output Folder / File collection |
 | **Note** | 📝 | Comments & annotations |
 
 ### ⚡ Execution Simulation
@@ -181,11 +181,11 @@ Generate valid JSON with this structure:
 
 | Type | Purpose | Execution Role |
 |------|---------|----------------|
-| `chef` | AI Agent / LLM | Processes inputs → produces outputs |
+| `chef` | AI Agent / LLM | Processes inputs → produces output files |
 | `input_file` | User inputs, variables | TRIGGERS workflow (sends first packets) |
 | `context_file` | Reference docs, prompts | RESPONDS to agent queries |
 | `ingredients` | Data sources, APIs | Static reference (no execution) |
-| `dish` | Final outputs | RECEIVES results from agents |
+| `dish` | Output folder / collection | COLLECTS output files from connected agents |
 | `note` | Annotations | No execution, documentation only |
 
 ## BLOCK DATA PROPERTIES (optional)
@@ -194,15 +194,18 @@ For `chef` blocks:
 - model: "gpt-4o", "claude-3", etc.
 - temperature: 0.0-2.0
 - maxTokens: number
+- outputs: array of output files this agent produces
+  - Each output: { id, filename, format, description }
+  - Formats: "markdown", "json", "text", "yaml", "csv", "other"
 
 For `context_file` / `input_file`:
 - filePath: "path/to/file.md"
 - content: "inline content if no file"
 - isExternal: true/false
 
-For `dish`:
-- outputFormat: "markdown|json|text|file"
-- savePath: "output/path"
+For `dish` (output folder):
+- outputFolder: "campaigns/[DATE]_[NAME]/" (supports placeholders)
+- Placeholders: [DATE], [NAME], [YYYY-MM]
 
 ## CONNECTION TYPES
 
@@ -224,15 +227,24 @@ For `dish`:
 
 When simulating, the engine follows these rules:
 1. `input_file` blocks START the flow (send packets to connected agents)
-2. `chef` blocks RECEIVE inputs, may QUERY context files, then OUTPUT
+2. `chef` blocks RECEIVE inputs, may QUERY context files, then OUTPUT files
 3. `context_file` blocks only RESPOND when queried by agents
-4. `dish` blocks RECEIVE final outputs
+4. `dish` blocks COLLECT output files from all connected agents
 
 Connection direction matters:
 - input_file → chef (input packet)
 - context_file → chef (will be queried, response goes back)
 - chef → chef (handoff packet)
-- chef → dish (output packet)
+- chef → dish (output packet - dish aggregates files from all connected chefs)
+
+## IMPORTANT: Chef Output Files
+
+Each chef/agent can define output files in its `data.outputs` array. These files are:
+1. Displayed on the Chef block under "Output Files"
+2. Automatically aggregated by connected Dish blocks
+3. Shown in the Dish block's file collection
+
+Always define meaningful output files for agents that produce deliverables.
 
 ## EXAMPLE
 
@@ -270,7 +282,13 @@ System: "Research assistant that gathers info and writes summaries"
       "title": "Research Agent",
       "description": "Gathers and analyzes information",
       "x": 350, "y": 100,
-      "data": { "model": "gpt-4o", "temperature": 0.3 }
+      "data": {
+        "model": "gpt-4o",
+        "temperature": 0.3,
+        "outputs": [
+          { "id": "o1", "filename": "research_notes.md", "format": "markdown" }
+        ]
+      }
     },
     {
       "id": "agent_writer",
@@ -278,22 +296,29 @@ System: "Research assistant that gathers info and writes summaries"
       "title": "Writer Agent",
       "description": "Creates polished summary",
       "x": 650, "y": 100,
-      "data": { "model": "gpt-4o", "temperature": 0.7 }
+      "data": {
+        "model": "gpt-4o",
+        "temperature": 0.7,
+        "outputs": [
+          { "id": "o2", "filename": "final_summary.md", "format": "markdown", "description": "Polished research summary" }
+        ]
+      }
     },
     {
-      "id": "output_summary",
+      "id": "output_folder",
       "type": "dish",
-      "title": "Research Summary",
-      "description": "Final formatted output",
+      "title": "Research Output",
+      "description": "Collects all research deliverables",
       "x": 900, "y": 100,
-      "data": { "outputFormat": "markdown" }
+      "data": { "outputFolder": "research/[DATE]_[NAME]/" }
     }
   ],
   "connections": [
     { "id": "c1", "fromId": "input_query", "toId": "agent_researcher", "type": "flow" },
     { "id": "c2", "fromId": "ctx_style", "toId": "agent_writer", "type": "default" },
     { "id": "c3", "fromId": "agent_researcher", "toId": "agent_writer", "type": "flow", "label": "findings" },
-    { "id": "c4", "fromId": "agent_writer", "toId": "output_summary", "type": "flow" }
+    { "id": "c4", "fromId": "agent_researcher", "toId": "output_folder", "type": "flow" },
+    { "id": "c5", "fromId": "agent_writer", "toId": "output_folder", "type": "flow" }
   ]
 }
 
@@ -307,11 +332,11 @@ Now analyze the following system and generate the JSON schema:
 **Block Types:**
 | Type | Icon | Role |
 |------|------|------|
-| `chef` | 👨‍🍳 | AI Agent (processes data) |
+| `chef` | 👨‍🍳 | AI Agent (processes data, produces files) |
 | `input_file` | 📥 | Workflow trigger (user inputs) |
 | `context_file` | 📄 | Reference docs (agent queries) |
 | `ingredients` | 🥕 | Static data sources |
-| `dish` | 🍽️ | Final outputs |
+| `dish` | 📁 | Output folder (collects agent files) |
 | `note` | 📝 | Annotations |
 
 **Connection Types:**

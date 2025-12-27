@@ -33,10 +33,27 @@ The central processing unit of a workflow. Represents an AI agent or LLM.
 | Property | Type | Description |
 |----------|------|-------------|
 | `title` | string | Agent name |
-| `description` | string | Role/purpose description |
+| `description` | string | System prompt / instructions |
 | `model` | string | LLM model (e.g., "gpt-4") |
 | `temperature` | number | Creativity (0.0 - 2.0) |
 | `maxTokens` | number | Output limit |
+| `outputs` | OutputFile[] | Files this agent produces |
+
+### Output Files
+
+Agents can define output files they produce during execution:
+
+| OutputFile Property | Type | Description |
+|---------------------|------|-------------|
+| `id` | string | Unique identifier |
+| `filename` | string | Output filename (e.g., "01_brief.md") |
+| `format` | enum | markdown, json, text, yaml, csv, other |
+| `description` | string | What the file contains (optional) |
+
+**Example outputs:**
+- `01_brief_kampanii.md` - Campaign brief document
+- `assets.json` - Generated asset metadata
+- `report.csv` - Data export
 
 ### Execution Behavior
 
@@ -170,42 +187,58 @@ Dynamic user input that triggers workflow execution.
 
 ---
 
-## Dish (Output)
+## Dish (Output Folder)
 
-Final output destination that receives results from agents.
+Output collection that aggregates files produced by connected AI Agents. Acts as a folder destination for generated content.
 
 ### Visual
-- **Color**: Green accent
-- **Icon**: Plate 🍽️
-- **Shape**: Result card
+- **Color**: Purple accent
+- **Icon**: Folder 📁
+- **Shape**: Collection card with file list
 
 ### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `title` | string | Output name |
-| `description` | string | What it produces |
-| `outputFormat` | enum | markdown, json, text, file |
-| `savePath` | string | Save location (optional) |
+| `title` | string | Folder/collection name |
+| `description` | string | What the collection contains |
+| `outputFolder` | string | Base folder path (supports placeholders) |
+
+**Folder Path Placeholders:**
+- `[DATE]` - Current date
+- `[NAME]` - Campaign/project name
+- `[YYYY-MM]` - Year-month format
+
+**Example:** `campaigns/[DATE]_[NAME]/`
+
+### Aggregated Outputs
+
+The Dish block automatically collects output files from all connected Chef blocks:
+- Shows count of connected source agents
+- Lists all output files with filenames and formats
+- Displays source agent for each file
 
 ### Execution Behavior
 
 **States:**
-1. **Idle** - Waiting for output
-2. **Receiving** - Output packet arriving
-3. **Complete** - Success state
+1. **Idle** - Waiting for outputs
+2. **Receiving** - Output packets arriving from agents
+3. **Complete** - All outputs collected successfully
 
 **Data Flow:**
 ```
-[Chef] ──output──→ [Dish]
+[Chef 1] ──output──→ [Dish]
+[Chef 2] ──output──→ [Dish]
+[Chef 3] ──output──→ [Dish]
 ```
 
+**Note:** The Dish block collects outputs from **all connected agents**, creating a complete output collection for a workflow or scenario.
+
 ### Example Use Cases
-- Generated document
-- API response
-- Saved file
-- Report
-- Transformed data
+- Campaign folder with multiple generated documents
+- Project output collection
+- Multi-file report generation
+- Asset package creation
 
 ---
 

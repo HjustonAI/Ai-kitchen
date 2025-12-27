@@ -20,6 +20,8 @@ The application state is centralized here. **Single Source of Truth** - do not c
 - `Block`: Nodes on canvas (`chef`, `ingredients`, `dish`, `note`, `context_file`, `input_file`)
 - `Connection`: Links between blocks (`fromId`, `toId`, `type`, `label`)
 - `Group`: Container that can collapse/expand, containing other blocks
+- `OutputFile`: File definition for AI Agent outputs (`id`, `filename`, `format`, `description`)
+- `BlockData`: Type-specific properties including `outputs[]` for chefs and `outputFolder` for dishes
 
 **View State**: `view` object with `x`, `y`, `scale` for pan/zoom.
 

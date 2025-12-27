@@ -1,9 +1,9 @@
 import { useMemo, memo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Scroll, ChefHat, ExternalLink, Layers, BoxSelect, Utensils, StickyNote, FileText, Keyboard, Settings, Cpu, Thermometer, Hash, Save, Database, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Scroll, ChefHat, ExternalLink, Layers, BoxSelect, Utensils, StickyNote, FileText, Keyboard, Settings, Cpu, Thermometer, Hash, ChevronDown, ChevronRight, FileOutput, Plus, Trash2, FolderOpen } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
-import type { Block, BlockData } from '../types';
+import type { Block, BlockData, OutputFile, OutputFileFormat } from '../types';
 
 // --- Helper Components ---
 
@@ -272,6 +272,102 @@ const ContextPanelContent = memo(({ mode }: { mode: 'single' | 'multi' | 'group'
                 className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-kitchen-accent/50 transition-colors"
               />
             </div>
+
+            {/* Output Files Management */}
+            <div className="space-y-2 pt-4 border-t border-white/10">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
+                  <FileOutput size={12} /> Output Files
+                </label>
+                <button
+                  onClick={() => {
+                    const newOutput: OutputFile = {
+                      id: crypto.randomUUID(),
+                      filename: 'new_file.md',
+                      format: 'markdown',
+                      description: ''
+                    };
+                    const outputs = [...(blockData.outputs || []), newOutput];
+                    handleDataUpdate({ outputs });
+                    updateBlock(singleBlock.id, { data: { ...blockData, outputs } });
+                  }}
+                  className="flex items-center gap-1 text-[10px] text-kitchen-accent hover:text-white transition-colors px-2 py-1 rounded bg-kitchen-accent/10 hover:bg-kitchen-accent/20"
+                >
+                  <Plus size={10} />
+                  Add File
+                </button>
+              </div>
+              
+              {(!blockData.outputs || blockData.outputs.length === 0) ? (
+                <div className="text-[11px] text-white/30 italic text-center py-3 border border-dashed border-white/10 rounded-lg">
+                  No output files defined
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {blockData.outputs.map((output, index) => (
+                    <div key={output.id} className="bg-black/20 border border-white/10 rounded-lg p-2 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={output.filename}
+                          onChange={(e) => {
+                            const outputs = [...(blockData.outputs || [])];
+                            outputs[index] = { ...outputs[index], filename: e.target.value };
+                            handleDataUpdate({ outputs });
+                          }}
+                          onBlur={() => {
+                            updateBlock(singleBlock.id, { data: blockData });
+                          }}
+                          placeholder="filename.md"
+                          className="flex-1 bg-black/30 border border-white/5 rounded px-2 py-1 text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50"
+                        />
+                        <select
+                          value={output.format}
+                          onChange={(e) => {
+                            const outputs = [...(blockData.outputs || [])];
+                            outputs[index] = { ...outputs[index], format: e.target.value as OutputFileFormat };
+                            handleDataUpdate({ outputs });
+                            updateBlock(singleBlock.id, { data: { ...blockData, outputs } });
+                          }}
+                          className="bg-black/30 border border-white/5 rounded px-2 py-1 text-[10px] text-white/70 focus:outline-none appearance-none"
+                        >
+                          <option value="markdown">MD</option>
+                          <option value="json">JSON</option>
+                          <option value="text">TXT</option>
+                          <option value="yaml">YAML</option>
+                          <option value="csv">CSV</option>
+                          <option value="other">Other</option>
+                        </select>
+                        <button
+                          onClick={() => {
+                            const outputs = blockData.outputs?.filter((_, i) => i !== index) || [];
+                            handleDataUpdate({ outputs });
+                            updateBlock(singleBlock.id, { data: { ...blockData, outputs } });
+                          }}
+                          className="p-1 text-white/30 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={output.description || ''}
+                        onChange={(e) => {
+                          const outputs = [...(blockData.outputs || [])];
+                          outputs[index] = { ...outputs[index], description: e.target.value };
+                          handleDataUpdate({ outputs });
+                        }}
+                        onBlur={() => {
+                          updateBlock(singleBlock.id, { data: blockData });
+                        }}
+                        placeholder="Description (optional)"
+                        className="w-full bg-black/20 border border-white/5 rounded px-2 py-1 text-[10px] text-white/60 placeholder-white/15 focus:outline-none focus:border-purple-500/30"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -309,38 +405,93 @@ const ContextPanelContent = memo(({ mode }: { mode: 'single' | 'multi' | 'group'
 
         {singleBlock.type === 'dish' && (
           <div className="space-y-4">
+            {/* Output Folder Path */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
-                <Database size={12} /> Output Format
-              </label>
-              <select
-                value={blockData.outputFormat || 'markdown'}
-                onChange={(e) => {
-                  handleDataUpdate({ outputFormat: e.target.value as any });
-                  updateBlock(singleBlock.id, { data: { ...blockData, outputFormat: e.target.value as any } });
-                }}
-                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-kitchen-accent/50 transition-colors appearance-none"
-              >
-                <option value="markdown">Markdown (.md)</option>
-                <option value="json">JSON (.json)</option>
-                <option value="text">Plain Text (.txt)</option>
-                <option value="file">Binary File</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
-                <Save size={12} /> Save Path
+                <FolderOpen size={12} /> Output Folder
               </label>
               <input
                 type="text"
-                value={blockData.savePath || ''}
-                onChange={(e) => handleDataUpdate({ savePath: e.target.value })}
+                value={blockData.outputFolder || ''}
+                onChange={(e) => handleDataUpdate({ outputFolder: e.target.value })}
                 onBlur={commitDataUpdate}
-                placeholder="./output/result.md"
-                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-kitchen-accent/50 transition-colors"
+                placeholder="campaigns/[DATE]_[NAME]/"
+                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-kitchen-accent/50 transition-colors font-mono"
               />
+              <p className="text-[10px] text-white/30">Use [DATE], [NAME], [YYYY-MM] as placeholders</p>
             </div>
+
+            {/* Aggregated Outputs from Connected Agents */}
+            {(() => {
+              const connectedAgents = connections
+                .filter(c => c.toId === singleBlock.id)
+                .map(c => blocks.find(b => b.id === c.fromId))
+                .filter((b): b is Block => !!b && b.type === 'chef');
+              
+              const aggregatedOutputs: Array<{ agentTitle: string; filename: string; format: string; description?: string }> = [];
+              connectedAgents.forEach(agent => {
+                if (agent.data?.outputs) {
+                  agent.data.outputs.forEach(output => {
+                    aggregatedOutputs.push({
+                      agentTitle: agent.title,
+                      filename: output.filename,
+                      format: output.format,
+                      description: output.description
+                    });
+                  });
+                }
+              });
+
+              return (
+                <div className="space-y-2 pt-3 border-t border-white/10">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
+                      <FileOutput size={12} /> Collected Outputs
+                    </label>
+                    <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded">
+                      {aggregatedOutputs.length} files
+                    </span>
+                  </div>
+                  
+                  {connectedAgents.length === 0 ? (
+                    <div className="text-[11px] text-white/30 italic text-center py-3 border border-dashed border-white/10 rounded-lg">
+                      Connect AI Agents to collect their outputs
+                    </div>
+                  ) : aggregatedOutputs.length === 0 ? (
+                    <div className="text-[11px] text-white/30 italic text-center py-3 border border-dashed border-white/10 rounded-lg">
+                      Connected agents have no outputs defined
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                      {aggregatedOutputs.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-black/20 border border-white/5 text-[11px]"
+                          title={item.description || `From ${item.agentTitle}`}
+                        >
+                          <FileOutput size={11} className="text-purple-400 shrink-0" />
+                          <span className="font-mono text-white/80 truncate flex-1">{item.filename}</span>
+                          <span className="text-[9px] text-purple-400/60 uppercase shrink-0">{item.format}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {connectedAgents.length > 0 && (
+                    <div className="pt-2">
+                      <div className="text-[10px] text-white/40 mb-1">Sources:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {connectedAgents.map(agent => (
+                          <span key={agent.id} className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300/70 border border-cyan-500/20">
+                            {agent.title}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </CollapsibleSection>

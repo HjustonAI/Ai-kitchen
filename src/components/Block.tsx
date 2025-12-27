@@ -1,9 +1,9 @@
 import React, { useRef, useState, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
 import Draggable from 'react-draggable';
-import { ChefHat, Scroll, Utensils, StickyNote, X, GripVertical, ExternalLink, FileText, Keyboard, Eye, Loader2, Search, CheckCircle2, Send, Download } from 'lucide-react';
+import { ChefHat, Scroll, Utensils, StickyNote, X, GripVertical, ExternalLink, FileText, Keyboard, Eye, Loader2, Search, CheckCircle2, Send, Download, FileOutput, FolderOpen } from 'lucide-react';
 import TextareaAutosize from 'react-textarea-autosize';
-import type { Block as BlockType } from '../types';
+import type { Block as BlockType, OutputFile } from '../types';
 import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
 import { useExecutionStore, type ContextBlockState, type InputBlockState, type DishBlockState } from '../store/useExecutionStore';
@@ -279,6 +279,27 @@ const ChefBlock = ({ block, isSelected, isActive, agentPhase, handlers }: BlockC
           </div>
         </div>
       )}
+
+      {/* Output Files - Files this agent produces */}
+      {block.data?.outputs && block.data.outputs.length > 0 && (
+        <div className="px-3 pb-3">
+          <div className="text-[10px] font-mono text-slate-500 mb-1 uppercase tracking-wider flex items-center gap-2">
+            Output Files <span className="bg-purple-900/50 text-purple-300 px-1 rounded text-[9px]">{block.data.outputs.length}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {block.data.outputs.map(output => (
+              <div
+                key={output.id}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-[10px] text-purple-200/90 transition-all group/tag"
+                title={output.description || output.filename}
+              >
+                <FileOutput size={10} className="text-purple-400" />
+                <span className="truncate max-w-[140px] font-mono">{output.filename}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -461,8 +482,37 @@ const InputFileBlock = ({ block, isSelected, inputState, handlers }: BlockCompon
 };
 
 const DishBlock = ({ block, isSelected, isActive, dishState, handlers }: BlockComponentProps) => {
+  const connections = useStore((state) => state.connections);
+  const blocks = useStore((state) => state.blocks);
   const isReceiving = dishState === 'receiving';
   const isComplete = dishState === 'complete';
+  
+  // Get all connected agents and their output files
+  const connectedAgents = React.useMemo(() => {
+    return connections
+      .filter(c => c.toId === block.id)
+      .map(c => blocks.find(b => b.id === c.fromId))
+      .filter((b): b is BlockType => !!b && b.type === 'chef');
+  }, [connections, blocks, block.id]);
+
+  // Aggregate all output files from connected agents
+  const aggregatedOutputs = React.useMemo(() => {
+    const outputs: Array<{ agentId: string; agentTitle: string; file: OutputFile }> = [];
+    connectedAgents.forEach(agent => {
+      if (agent.data?.outputs) {
+        agent.data.outputs.forEach(output => {
+          outputs.push({
+            agentId: agent.id,
+            agentTitle: agent.title,
+            file: output
+          });
+        });
+      }
+    });
+    return outputs;
+  }, [connectedAgents]);
+
+  const totalFiles = aggregatedOutputs.length;
   
   return (
     <div className={cn(
@@ -489,40 +539,99 @@ const DishBlock = ({ block, isSelected, isActive, dishState, handlers }: BlockCo
         </motion.div>
       )}
       
-      <div className="p-4 text-center relative drag-handle">
-        <div className="absolute right-2 top-2">
-          <BlockControls handlers={handlers} />
-        </div>
-
+      {/* Header */}
+      <div className="flex items-center gap-3 p-3 border-b border-purple-700/30 bg-purple-800/20 rounded-t-2xl drag-handle">
         <div className={cn(
-          "mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-3 ring-1 transition-all",
+          "p-2 rounded-lg transition-all duration-300",
           isComplete 
-            ? "bg-green-500/30 text-green-400 ring-green-400/50 shadow-[0_0_20px_rgba(34,197,94,0.5)]" 
+            ? "bg-green-500/20 text-green-400" 
             : isReceiving 
-              ? "bg-purple-500/30 text-purple-300 ring-purple-400/50 animate-pulse"
-              : "bg-kitchen-neon-purple/20 text-kitchen-neon-purple ring-kitchen-neon-purple/50 shadow-[0_0_15px_rgba(188,19,254,0.3)]"
+              ? "bg-purple-500/30 text-purple-300 animate-pulse"
+              : "bg-kitchen-neon-purple/20 text-kitchen-neon-purple"
         )}>
-          {isComplete ? <CheckCircle2 size={24} /> : <Utensils size={24} />}
+          {isComplete ? <CheckCircle2 size={20} /> : <FolderOpen size={20} />}
         </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-purple-400/80">Output Folder</div>
+          <input
+            className="w-full bg-transparent text-sm font-bold text-white outline-none placeholder-white/30"
+            value={block.title}
+            onChange={(e) => handlers.onTitleChange(e.target.value)}
+            onBlur={handlers.onTitleBlur}
+            placeholder="Folder Name"
+          />
+        </div>
+        <BlockControls handlers={handlers} />
+      </div>
 
-        <input
-          className="w-full bg-transparent text-center text-lg font-bold text-white outline-none placeholder-white/30 mb-1"
-          value={block.title}
-          onChange={(e) => handlers.onTitleChange(e.target.value)}
-          onBlur={handlers.onTitleBlur}
-          placeholder="Result Name"
-        />
+      {/* Folder Path */}
+      {block.data?.outputFolder && (
+        <div className="px-3 pt-2">
+          <div className="text-[9px] font-mono text-purple-400/60 truncate" title={block.data.outputFolder}>
+            📁 {block.data.outputFolder}
+          </div>
+        </div>
+      )}
 
-        <div className="h-px w-16 bg-purple-500/30 mx-auto my-2" />
-
+      {/* Content */}
+      <div className="p-3 pt-2">
+        {/* Description */}
         <TextareaAutosize
-          className="w-full bg-transparent text-center text-xs text-purple-200/80 outline-none resize-none"
+          className="w-full bg-purple-950/30 rounded-lg p-2 text-xs text-purple-200/80 outline-none resize-none border border-purple-800/30 focus:border-purple-500/50 transition-colors mb-3"
           value={block.description}
           onChange={(e) => handlers.onDescriptionChange(e.target.value)}
           onBlur={handlers.onDescriptionBlur}
-          placeholder="Expected output..."
+          placeholder="Describe the output collection..."
           minRows={1}
         />
+
+        {/* Connected Agents Section */}
+        {connectedAgents.length > 0 && (
+          <div className="mb-3">
+            <div className="text-[10px] font-mono text-purple-500/70 mb-1.5 uppercase tracking-wider flex items-center gap-2">
+              Sources <span className="bg-purple-900/50 text-purple-300 px-1 rounded text-[9px]">{connectedAgents.length}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {connectedAgents.map(agent => (
+                <div
+                  key={agent.id}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-[9px] text-cyan-300/80"
+                >
+                  <ChefHat size={9} className="text-cyan-400" />
+                  <span className="truncate max-w-[80px]">{agent.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Collected Files Section */}
+        <div className="text-[10px] font-mono text-purple-500/70 mb-1.5 uppercase tracking-wider flex items-center gap-2">
+          Generated Files <span className="bg-purple-900/50 text-purple-300 px-1 rounded text-[9px]">{totalFiles}</span>
+        </div>
+        
+        {totalFiles === 0 ? (
+          <div className="text-[10px] text-purple-400/40 italic text-center py-2 border border-dashed border-purple-700/30 rounded-lg">
+            Connect agents to collect their outputs
+          </div>
+        ) : (
+          <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+            {aggregatedOutputs.map((item, idx) => (
+              <div
+                key={`${item.agentId}-${item.file.id}-${idx}`}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-purple-950/50 border border-purple-700/30 text-[10px] group/file"
+                title={item.file.description || `From ${item.agentTitle}`}
+              >
+                <FileOutput size={11} className={cn(
+                  "shrink-0",
+                  isComplete ? "text-green-400" : "text-purple-400"
+                )} />
+                <span className="font-mono text-purple-100 truncate flex-1">{item.file.filename}</span>
+                <span className="text-[8px] text-purple-500/60 uppercase">{item.file.format}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

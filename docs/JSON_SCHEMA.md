@@ -68,26 +68,38 @@ type BlockType = 'chef' | 'ingredients' | 'dish' | 'note' | 'context_file' | 'in
 Type-specific optional properties:
 
 ```typescript
+// Output file definition for AI Agent file production
+interface OutputFile {
+  id: string;              // Unique identifier
+  filename: string;        // e.g. "01_brief.md"
+  format: OutputFileFormat; // markdown, json, text, yaml, csv, other
+  description?: string;    // What this file contains
+}
+
+type OutputFileFormat = 'markdown' | 'json' | 'text' | 'yaml' | 'csv' | 'other';
+
 interface BlockData {
   // Chef properties
   model?: string;           // "gpt-4o", "claude-3", etc.
   temperature?: number;     // 0.0 - 2.0
   maxTokens?: number;       // Output limit
+  outputs?: OutputFile[];   // Files this AI Agent produces
   
   // File/Context properties
   filePath?: string;        // Path to file
   isExternal?: boolean;     // External source flag
   content?: string;         // Inline content
 
-  // Dish properties
-  outputFormat?: 'markdown' | 'json' | 'text' | 'file';
-  savePath?: string;        // Where to save output
+  // Dish properties (folder/collection settings)
+  outputFolder?: string;    // Base folder path for outputs (supports placeholders)
+  outputFormat?: 'markdown' | 'json' | 'text' | 'file'; // Legacy
+  savePath?: string;        // Legacy - kept for backward compatibility
 }
 ```
 
 ### Block Examples
 
-**Chef (AI Agent):**
+**Chef (AI Agent) with Output Files:**
 ```json
 {
   "id": "agent_writer",
@@ -98,6 +110,24 @@ interface BlockData {
   "width": 320, "height": 180,
   "data": {
     "model": "gpt-4o",
+    "temperature": 0.7,
+    "maxTokens": 2000,
+    "outputs": [
+      {
+        "id": "out1",
+        "filename": "01_content.md",
+        "format": "markdown",
+        "description": "Main content document"
+      },
+      {
+        "id": "out2",
+        "filename": "02_social_posts.json",
+        "format": "json",
+        "description": "Social media post variations"
+      }
+    ]
+  }
+}
     "temperature": 0.7,
     "maxTokens": 2000
   }
@@ -133,17 +163,16 @@ interface BlockData {
 }
 ```
 
-**Dish (Output):**
+**Dish (Output Folder):**
 ```json
 {
-  "id": "output_final",
+  "id": "output_campaign",
   "type": "dish",
-  "title": "Final Deliverable",
-  "description": "Completed content package",
+  "title": "Campaign Folder",
+  "description": "All campaign deliverables",
   "x": 800, "y": 200,
   "data": {
-    "outputFormat": "markdown",
-    "savePath": "output/deliverable.md"
+    "outputFolder": "campaigns/[DATE]_[NAME]/"
   }
 }
 ```
