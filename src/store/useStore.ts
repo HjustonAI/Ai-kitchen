@@ -62,15 +62,6 @@ interface AppState {
   loadState: (data: { blocks: Block[], connections: Connection[], groups?: Group[] }) => void;
 }
 
-// Simple debounce implementation
-const debounce = (func: Function, wait: number) => {
-  let timeout: any;
-  return (...args: any[]) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
-};
-
 // Helper to calculate highlights based on current selection
 const calculateHighlights = (selectedBlockIds: string[], blocks: Block[], connections: Connection[]) => {
   if (selectedBlockIds.length === 0) {
@@ -466,7 +457,7 @@ export const useStore = create<AppState>()(
       equality: (pastState, currentState) => {
         return JSON.stringify(pastState) === JSON.stringify(currentState);
       },
-      onSave: (pastState, currentState) => {
+      onSave: (_pastState, _currentState) => {
         // Optional debug
         // console.log('[Zundo] Saved');
       },

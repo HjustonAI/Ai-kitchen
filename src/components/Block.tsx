@@ -1,10 +1,13 @@
 import React, { useRef, useState, useEffect, memo } from 'react';
+import { motion } from 'framer-motion';
 import Draggable from 'react-draggable';
-import { ChefHat, Scroll, Utensils, StickyNote, X, GripVertical, ExternalLink, FileText, Keyboard, Eye } from 'lucide-react';
+import { ChefHat, Scroll, Utensils, StickyNote, X, GripVertical, ExternalLink, FileText, Keyboard, Eye, Loader2, Search, CheckCircle2 } from 'lucide-react';
 import TextareaAutosize from 'react-textarea-autosize';
 import type { Block as BlockType } from '../types';
 import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
+import { useExecutionStore } from '../store/useExecutionStore';
+import type { AgentPhase } from '../lib/executionEngine';
 
 // --- Types & Interfaces ---
 
@@ -26,6 +29,8 @@ interface BlockHandlers {
 interface BlockComponentProps {
   block: BlockType;
   isSelected: boolean;
+  isActive?: boolean;
+  agentPhase?: AgentPhase;
   handlers: BlockHandlers;
 }
 
@@ -77,7 +82,7 @@ const BlockControls = ({ handlers, dark = false }: { handlers: BlockHandlers, da
   </div>
 );
 
-const ChefBlock = ({ block, isSelected, handlers }: BlockComponentProps) => {
+const ChefBlock = ({ block, isSelected, isActive, agentPhase, handlers }: BlockComponentProps) => {
   const connections = useStore((state) => state.connections);
   const blocks = useStore((state) => state.blocks);
   const setHoveredBlockId = useStore((state) => state.setHoveredBlockId);
@@ -104,14 +109,49 @@ const ChefBlock = ({ block, isSelected, handlers }: BlockComponentProps) => {
       .filter((b): b is BlockType => !!b && b.type === 'input_file');
   }, [connections, blocks, block.id]);
 
+  // Agent phase visual config
+  const phaseConfig = {
+    idle: { icon: null, label: '', color: '' },
+    receiving: { icon: null, label: '', color: '' },
+    querying: { icon: Search, label: 'Querying context...', color: 'text-orange-400' },
+    awaiting: { icon: Loader2, label: 'Waiting for response...', color: 'text-amber-400' },
+    processing: { icon: Loader2, label: 'Processing...', color: 'text-cyan-400' },
+    outputting: { icon: CheckCircle2, label: 'Sending output...', color: 'text-green-400' },
+  };
+
+  const currentPhase = agentPhase && phaseConfig[agentPhase];
+  const PhaseIcon = currentPhase?.icon;
+
   return (
     <div className={cn(
       "w-80 rounded-xl border-2 bg-slate-900/95 backdrop-blur-xl shadow-2xl transition-all duration-200 group",
-      isSelected ? "border-kitchen-neon-cyan shadow-[0_0_30px_-5px_rgba(0,243,255,0.3)]" : "border-slate-700 hover:border-slate-600"
+      isActive && "ring-4 ring-kitchen-neon-cyan/50 shadow-[0_0_50px_rgba(0,243,255,0.6)] scale-105 border-kitchen-neon-cyan",
+      agentPhase === 'querying' && "ring-4 ring-orange-400/50 shadow-[0_0_40px_rgba(251,191,36,0.4)] border-orange-400",
+      agentPhase === 'processing' && "ring-4 ring-kitchen-neon-cyan/50 shadow-[0_0_50px_rgba(0,243,255,0.6)] border-kitchen-neon-cyan",
+      isSelected && !isActive ? "border-kitchen-neon-cyan shadow-[0_0_30px_-5px_rgba(0,243,255,0.3)]" : "border-slate-700 hover:border-slate-600"
     )}>
+      {/* Agent Phase Indicator */}
+      {PhaseIcon && currentPhase?.label && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className={cn(
+            "absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-900/90 border border-slate-700 backdrop-blur-sm",
+            currentPhase.color
+          )}
+        >
+          <PhaseIcon size={12} className={agentPhase === 'processing' || agentPhase === 'awaiting' ? 'animate-spin' : ''} />
+          <span>{currentPhase.label}</span>
+        </motion.div>
+      )}
+
       {/* ID Card Header */}
       <div className="flex items-center gap-3 p-3 border-b border-slate-700/50 bg-slate-800/50 rounded-t-xl drag-handle">
-        <div className={cn("p-2 rounded-lg bg-kitchen-neon-cyan/10 text-kitchen-neon-cyan")}>
+        <div className={cn(
+          "p-2 rounded-lg transition-all duration-300",
+          isActive ? "bg-kitchen-neon-cyan/20 text-kitchen-neon-cyan animate-pulse" : "bg-kitchen-neon-cyan/10 text-kitchen-neon-cyan"
+        )}>
           <ChefHat size={20} />
         </div>
         <div className="flex-1 min-w-0">
@@ -341,10 +381,11 @@ const InputFileBlock = ({ block, isSelected, handlers }: BlockComponentProps) =>
   </div>
 );
 
-const DishBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
+const DishBlock = ({ block, isSelected, isActive, handlers }: BlockComponentProps) => (
   <div className={cn(
     "w-72 rounded-2xl border-2 bg-gradient-to-br from-purple-900/90 to-slate-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 group",
-    isSelected ? "border-kitchen-neon-purple shadow-[0_0_30px_-5px_rgba(188,19,254,0.4)]" : "border-purple-500/30 hover:border-purple-500/50"
+    isActive && "ring-4 ring-kitchen-neon-purple/50 shadow-[0_0_50px_rgba(188,19,254,0.6)] scale-105 border-kitchen-neon-purple",
+    isSelected && !isActive ? "border-kitchen-neon-purple shadow-[0_0_30px_-5px_rgba(188,19,254,0.4)]" : "border-purple-500/30 hover:border-purple-500/50"
   )}>
     <div className="p-4 text-center relative drag-handle">
       <div className="absolute right-2 top-2">
@@ -537,9 +578,14 @@ export const Block: React.FC<BlockProps> = memo(({ block, scale }) => {
     onFocus: () => focusBlock(block.id),
   };
 
+  const activeNodeIds = useExecutionStore((state) => state.activeNodeIds);
+  const agentPhases = useExecutionStore((state) => state.agentPhases);
+  const isActive = activeNodeIds.includes(block.id);
+  const agentPhase = agentPhases.get(block.id) || 'idle';
+
   // Render specific block type with Level-of-Detail (LOD)
   const renderBlockContent = () => {
-    const props = { block: { ...block, title, description }, isSelected, handlers };
+    const props = { block: { ...block, title, description }, isSelected, isActive, handlers, agentPhase };
 
     // LOD thresholds: minimal (<0.4), compact (0.4 - 0.7), full (>=0.7)
     if (scale < 0.4) {
@@ -607,7 +653,14 @@ export const Block: React.FC<BlockProps> = memo(({ block, scale }) => {
         onMouseEnter={() => setHoveredBlockId(block.id)}
         onMouseLeave={() => setHoveredBlockId(null)}
       >
-        {renderBlockContent()}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, filter: "blur(4px)" }}
+          animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+          transition={{ duration: 0.3 }}
+          className="w-full h-full"
+        >
+          {renderBlockContent()}
+        </motion.div>
       </div>
     </Draggable>
   );

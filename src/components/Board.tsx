@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useExecutionStore } from '../store/useExecutionStore';
 
 interface BoardProps {
   children: React.ReactNode;
@@ -11,19 +12,22 @@ interface BoardProps {
   onWheel: (e: React.WheelEvent) => void;
 }
 
-export const Board: React.FC<BoardProps> = ({ 
-  children, 
-  onClick, 
-  view, 
-  onMouseDown, 
-  onMouseMove, 
+export const Board: React.FC<BoardProps> = ({
+  children,
+  onClick,
+  view,
+  onMouseDown,
+  onMouseMove,
   onMouseUp,
-  onWheel 
+  onWheel
 }) => {
+  const simulationMode = useExecutionStore((s) => s.simulationMode);
+
   return (
-    <div 
+    <div
       id="board-container"
-      className="flex-1 relative overflow-hidden bg-kitchen-bg perspective-1000 cursor-grab active:cursor-grabbing"
+      className={`flex-1 relative overflow-hidden perspective-1000 cursor-grab active:cursor-grabbing transition-colors duration-500 ${simulationMode ? 'bg-slate-950' : 'bg-kitchen-bg'
+        }`}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -32,7 +36,7 @@ export const Board: React.FC<BoardProps> = ({
       onClick={(e) => onClick(e)}
     >
       {/* Animated Grid Background */}
-      <div 
+      <div
         className="absolute inset-0 opacity-20 pointer-events-none transition-transform duration-75 ease-out"
         style={{
           backgroundImage: `
@@ -43,11 +47,11 @@ export const Board: React.FC<BoardProps> = ({
           backgroundPosition: `${view.x}px ${view.y}px`,
         }}
       />
-      
+
       {/* Subtle ambient glow */}
       <div className="absolute inset-0 bg-gradient-to-b from-kitchen-bg/0 via-kitchen-bg/0 to-kitchen-bg/80 pointer-events-none" />
-      
-      <motion.div 
+
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1 }}

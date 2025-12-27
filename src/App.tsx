@@ -6,7 +6,7 @@ import { BottomBar } from './components/BottomBar';
 import { Block as BlockComponent } from './components/Block';
 import { Group } from './components/Group';
 import { ConnectionsLayer } from './components/ConnectionsLayer';
-import ExecutionLayer from './components/ExecutionLayer';
+import ExecutionLayer from './components/ExecutionLayerOptimized';
 import { ContextPanel } from './components/ContextPanel';
 import { useStore } from './store/useStore';
 import { getBlockDimensions } from './lib/utils';
@@ -342,7 +342,6 @@ function App() {
             />
           ))}
           <ConnectionsLayer />
-          <ExecutionLayer />
           {blocks.filter(block => !isBlockHidden(block)).map(block => (
             <BlockComponent
               key={block.id}
@@ -351,6 +350,8 @@ function App() {
             />
           ))}
         </Board>
+        {/* ExecutionLayer outside Board for screen-space rendering */}
+        <ExecutionLayer />
 
         <BottomBar />
         <ContextPanel />

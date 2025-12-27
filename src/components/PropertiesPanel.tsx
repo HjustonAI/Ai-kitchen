@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Type, Tag, Settings, FileText, Save, Database, Cpu, Thermometer, Hash } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import type { ConnectionType, Block, BlockData } from '../types';
-import TextareaAutosize from 'react-textarea-autosize';
+import type { ConnectionType, BlockData } from '../types';
+// TextareaAutosize - reserved for future use
+// import TextareaAutosize from 'react-textarea-autosize';
 
 const ConnectionProperties = () => {
   const selectedConnectionId = useStore((state) => state.selectedConnectionId);
