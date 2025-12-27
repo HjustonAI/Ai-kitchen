@@ -9,7 +9,7 @@ import { ConnectionsLayer } from './components/ConnectionsLayer';
 import ExecutionLayer from './components/ExecutionLayerOptimized';
 import { ContextPanel } from './components/ContextPanel';
 import { useStore } from './store/useStore';
-import { getBlockDimensions } from './lib/utils';
+import { getBlockDimensions } from './lib/layoutUtils';
 
 function App() {
   // Global State

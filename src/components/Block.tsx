@@ -7,7 +7,7 @@ import type { Block as BlockType } from '../types';
 import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
 import { useExecutionStore } from '../store/useExecutionStore';
-import type { AgentPhase } from '../lib/executionEngine';
+import type { AgentPhase } from '../lib/executionEngineV2';
 
 // --- Types & Interfaces ---
 
@@ -109,24 +109,26 @@ const ChefBlock = ({ block, isSelected, isActive, agentPhase, handlers }: BlockC
       .filter((b): b is BlockType => !!b && b.type === 'input_file');
   }, [connections, blocks, block.id]);
 
-  // Agent phase visual config
+  // Agent phase visual config (v2.0 - event-driven)
+  // idle = waiting for input trigger
+  // collecting = requesting & receiving context
+  // processing = thinking
+  // outputting = sending results
   const phaseConfig = {
-    idle: { icon: null, label: '', color: '' },
-    receiving: { icon: null, label: '', color: '' },
-    querying: { icon: Search, label: 'Querying context...', color: 'text-orange-400' },
-    awaiting: { icon: Loader2, label: 'Waiting for response...', color: 'text-amber-400' },
+    idle: { icon: null, label: '', color: '' },  // No indicator when waiting
+    collecting: { icon: Search, label: 'Collecting context...', color: 'text-orange-400' },
     processing: { icon: Loader2, label: 'Processing...', color: 'text-cyan-400' },
     outputting: { icon: CheckCircle2, label: 'Sending output...', color: 'text-green-400' },
   };
 
-  const currentPhase = agentPhase && phaseConfig[agentPhase];
+  const currentPhase = agentPhase && phaseConfig[agentPhase as keyof typeof phaseConfig];
   const PhaseIcon = currentPhase?.icon;
 
   return (
     <div className={cn(
       "w-80 rounded-xl border-2 bg-slate-900/95 backdrop-blur-xl shadow-2xl transition-all duration-200 group",
       isActive && "ring-4 ring-kitchen-neon-cyan/50 shadow-[0_0_50px_rgba(0,243,255,0.6)] scale-105 border-kitchen-neon-cyan",
-      agentPhase === 'querying' && "ring-4 ring-orange-400/50 shadow-[0_0_40px_rgba(251,191,36,0.4)] border-orange-400",
+      agentPhase === 'collecting' && "ring-4 ring-orange-400/50 shadow-[0_0_40px_rgba(251,191,36,0.4)] border-orange-400",
       agentPhase === 'processing' && "ring-4 ring-kitchen-neon-cyan/50 shadow-[0_0_50px_rgba(0,243,255,0.6)] border-kitchen-neon-cyan",
       isSelected && !isActive ? "border-kitchen-neon-cyan shadow-[0_0_30px_-5px_rgba(0,243,255,0.3)]" : "border-slate-700 hover:border-slate-600"
     )}>
@@ -141,7 +143,7 @@ const ChefBlock = ({ block, isSelected, isActive, agentPhase, handlers }: BlockC
             currentPhase.color
           )}
         >
-          <PhaseIcon size={12} className={agentPhase === 'processing' || agentPhase === 'awaiting' ? 'animate-spin' : ''} />
+          <PhaseIcon size={12} className={agentPhase === 'processing' || agentPhase === 'collecting' ? 'animate-spin' : ''} />
           <span>{currentPhase.label}</span>
         </motion.div>
       )}

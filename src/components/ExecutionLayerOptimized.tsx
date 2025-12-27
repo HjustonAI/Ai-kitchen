@@ -20,15 +20,14 @@
 import React, { useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { useExecutionStore, type DataPacket } from '../store/useExecutionStore';
-import { 
-  getBezierData, 
+import { getBezierData, 
   getPointAtDistance, 
   clearBezierCache,
   type Point 
 } from '../lib/animationUtilsOptimized';
 import { OptimizedParticleSystem } from '../lib/particleSystemOptimized';
 import { getBlockCenter, getEffectiveBlock } from '../lib/layoutUtils';
-import { executionEngine } from '../lib/executionEngine';
+import { executionEngine } from '../lib/executionEngineV2';
 
 // ============ Configuration ============
 const TARGET_SPEED_PPS = 280; // Pixels per second base speed
@@ -117,7 +116,6 @@ export const ExecutionLayerOptimized: React.FC = () => {
   
   const simulationMode = useExecutionStore((s) => s.simulationMode);
   const dataPackets = useExecutionStore((s) => s.dataPackets);
-  const onPacketArrived = useExecutionStore((s) => s.onPacketArrived);
 
   // Refs for stable render loop
   const blocksRef = useRef(blocks);
@@ -235,36 +233,45 @@ export const ExecutionLayerOptimized: React.FC = () => {
         const start = getBlockCenter(fromBlock, draggingBlockId, draggingPos, currentView.scale);
         const end = getBlockCenter(toBlock, draggingBlockId, draggingPos, currentView.scale);
         
-        tempStart.x = start.x;
-        tempStart.y = start.y;
-        tempEnd.x = end.x;
-        tempEnd.y = end.y;
+        // Handle reverse packets (response traveling backwards on same connection)
+        const isReverse = (packet as any).isReverse === true;
+        if (isReverse) {
+          // Swap start and end for reverse direction
+          tempStart.x = end.x;
+          tempStart.y = end.y;
+          tempEnd.x = start.x;
+          tempEnd.y = start.y;
+        } else {
+          tempStart.x = start.x;
+          tempStart.y = start.y;
+          tempEnd.x = end.x;
+          tempEnd.y = end.y;
+        }
 
         // Get or create packet state - USE PACKET TYPE for color
         const packetType = packet.type || 'input';
         const state = getPacketState(packet.id, packetType);
 
-        // Get cached bezier data
-        const bezier = getBezierData(conn.id, tempStart, tempEnd);
+        // Get cached bezier data (use reverse flag for cache key)
+        const cacheKey = isReverse ? `${conn.id}_rev` : conn.id;
+        const bezier = getBezierData(cacheKey, tempStart, tempEnd);
 
-        // Update progress (constant velocity)
-        if (execRunning && bezier.length > 0) {
-          const speedPPS = TARGET_SPEED_PPS * executionSpeed;
-          const distanceThisFrame = (speedPPS * dt) / 1000;
-          const progressIncrement = distanceThisFrame / bezier.length;
-          state.progress = Math.min(1, state.progress + progressIncrement);
-        }
+        // Use progress from engine (via store) - engine is single source of truth
+        state.progress = packet.progress;
 
-        // Check for arrival
+        // Check for arrival (visual only - engine handles logic)
         if (state.progress >= 1 && !arrivedPackets.includes(packet.id)) {
           arrivedPackets.push(packet.id);
+          
+          // Determine arrival point (tempEnd for normal, tempEnd for reverse too since we swapped)
+          const arrivalPoint = { x: tempEnd.x, y: tempEnd.y };
           
           // Emit arrival particles based on packet type and destination
           const arrivalColor = PACKET_TYPE_COLORS[packetType]?.key || COLORS.cyan.key;
           
-          if (packetType === 'output' || toBlock.type === 'dish') {
+          if (packetType === 'output' || (!isReverse && toBlock.type === 'dish')) {
             // Final output - celebration burst
-            ps.emit(end.x, end.y, 25, { 
+            ps.emit(arrivalPoint.x, arrivalPoint.y, 25, { 
               color: COLORS.purple.key, 
               size: 3, 
               life: 50, 
@@ -273,7 +280,7 @@ export const ExecutionLayerOptimized: React.FC = () => {
             });
           } else if (packetType === 'response') {
             // Context response arriving at agent - subtle green glow
-            ps.emit(end.x, end.y, 12, { 
+            ps.emit(arrivalPoint.x, arrivalPoint.y, 12, { 
               color: COLORS.green.key, 
               size: 2, 
               life: 40, 
@@ -282,7 +289,7 @@ export const ExecutionLayerOptimized: React.FC = () => {
             });
           } else if (packetType === 'query') {
             // Query arriving at context - orange ping
-            ps.emit(end.x, end.y, 8, { 
+            ps.emit(arrivalPoint.x, arrivalPoint.y, 8, { 
               color: COLORS.orange.key, 
               size: 2, 
               life: 30, 
@@ -290,7 +297,7 @@ export const ExecutionLayerOptimized: React.FC = () => {
             });
           } else {
             // Default arrival effect
-            ps.emit(end.x, end.y, 6, { 
+            ps.emit(arrivalPoint.x, arrivalPoint.y, 6, { 
               color: arrivalColor, 
               speed: 2, 
               life: 35 
@@ -393,7 +400,7 @@ export const ExecutionLayerOptimized: React.FC = () => {
 
       // ============ Cleanup ============
       
-      // Remove inactive packet states
+      // Remove inactive packet states (visual cleanup)
       for (const id of packetStatePool.keys()) {
         if (!activePacketIds.has(id)) {
           const state = packetStatePool.get(id);
@@ -404,14 +411,13 @@ export const ExecutionLayerOptimized: React.FC = () => {
         }
       }
 
-      // Handle arrived packets
-      if (arrivedPackets.length > 0) {
-        arrivedPackets.forEach(id => {
-          onPacketArrived(id, currentConnections);
-        });
-      }
+      // Emit arrival particles for packets that reached destination
+      // (Logic is handled by engine via onPacketRemoved callback)
+      arrivedPackets.forEach(id => {
+        // Particle effects already emitted during packet processing above
+      });
 
-      // Update execution engine
+      // Update execution engine (drives all logic)
       executionEngine.update(timestamp);
 
       rafRef.current = requestAnimationFrame(render);

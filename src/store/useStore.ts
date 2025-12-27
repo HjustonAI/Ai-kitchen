@@ -1,9 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
-import { getLayoutedElements } from '../lib/layoutUtils';
+import { getLayoutedElements, getBlockDimensions } from '../lib/layoutUtils';
 import { getConnectedElements } from '../lib/graphUtils';
-import { getBlockDimensions } from '../lib/utils';
 import type { Block, BlockType, Connection, Group } from '../types';
 
 interface ViewState {
@@ -457,7 +456,7 @@ export const useStore = create<AppState>()(
       equality: (pastState, currentState) => {
         return JSON.stringify(pastState) === JSON.stringify(currentState);
       },
-      onSave: (_pastState, _currentState) => {
+      onSave: () => {
         // Optional debug
         // console.log('[Zundo] Saved');
       },

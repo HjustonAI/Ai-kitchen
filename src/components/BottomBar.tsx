@@ -7,43 +7,14 @@ import { useExecutionStore } from '../store/useExecutionStore';
 const AnimationControls = () => {
   const isRunning = useExecutionStore((s) => s.simulationMode);
   const setSimulationMode = useExecutionStore((s) => s.setSimulationMode);
-  const setIsRunning = useExecutionStore((s) => s.setIsRunning);
   const executionSpeed = useExecutionStore((s) => s.executionSpeed);
   const setExecutionSpeed = useExecutionStore((s) => s.setExecutionSpeed);
 
-  const connections = useStore((s) => s.connections);
-  const blocks = useStore((s) => s.blocks);
-  const addPacket = useExecutionStore((s) => s.addPacket);
-  const clearExecution = useExecutionStore((s) => s.clearExecution);
-
   const toggleRun = () => {
-    const newState = !isRunning;
-    setSimulationMode(newState);
-    setIsRunning(newState);
-
-    if (newState) {
-      // START: Seed the simulation
-      // Find all "Starter" blocks (Input Files, Context Files)
-      const starterBlocks = blocks.filter(b => b.type === 'input_file' || b.type === 'context_file');
-
-      let packetsAdded = 0;
-      starterBlocks.forEach(block => {
-        const outgoing = connections.filter(c => c.fromId === block.id);
-        outgoing.forEach(conn => {
-          addPacket(conn.id);
-          packetsAdded++;
-        });
-      });
-
-      if (packetsAdded === 0) {
-        // Fallback: If no inputs connected, find ANY root node (no inputs) and fire?
-        // Or just let it be empty.
-      }
-    } else {
-      // STOP: Clear packets? Or let them drain?
-      // Let's clear to reset the state for next run
-      clearExecution();
-    }
+    // ExecutionEngine handles all packet logic via setSimulationMode
+    // - start() sends initial triggers only from input_file blocks
+    // - stop() clears all state
+    setSimulationMode(!isRunning);
   };
 
   const cycleSpeed = () => {

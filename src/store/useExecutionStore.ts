@@ -1,132 +1,58 @@
 /**
  * Execution Store - State management for the animation/simulation system
  * 
- * Integrates with ExecutionEngine for logical flow
+ * Integrates with ExecutionEngine v2.0 (Event-Driven State Machine)
+ * 
+ * Flow:
+ * 1. User clicks Play → setSimulationMode(true) → engine.start()
+ * 2. Engine sends packets only from input_file blocks
+ * 3. Packets trigger agent state transitions (idle → collecting → processing → outputting)
+ * 4. Context files only respond to query packets from agents
  */
 
 import { create } from 'zustand';
-import type { Connection } from '../types';
-import { executionEngine, type FlowPacket, type AgentPhase } from '../lib/executionEngine';
+import { executionEngine, type AgentPhase } from '../lib/executionEngineV2';
 
+// Visual packet representation for rendering
 export type DataPacket = {
   id: string;
   connectionId: string;
   progress: number; // 0..1
   type: 'input' | 'query' | 'response' | 'output' | 'handoff';
   fromAgentId?: string;
+  isReverse?: boolean; // For response packets traveling backwards
 };
 
 interface ExecutionState {
+  // Core state
   isRunning: boolean;
+  simulationMode: boolean;
+  executionSpeed: number;
+  
+  // Active elements
   activeNodeIds: string[];
   dataPackets: DataPacket[];
-  errors: { id: string; message: string; nodeId?: string }[];
-  
-  // Agent phase states for visual feedback
   agentPhases: Map<string, AgentPhase>;
 
-  // actions
-  setIsRunning: (isRunning: boolean) => void;
-  startNode: (id: string) => void;
-  stopNode: (id: string) => void;
-  addPacket: (connectionId: string) => string; // returns packet id
-  removePacket: (packetId: string) => void;
-  onPacketArrived: (packetId: string, connections: Connection[]) => void;
-  clearExecution: () => void;
-  
-  // Agent phase management
-  setAgentPhase: (agentId: string, phase: AgentPhase) => void;
-  getAgentPhase: (agentId: string) => AgentPhase;
-
-  // Animation/Simulation Control
-  simulationMode: boolean;
-  executionSpeed: number; // 1x, 2x, etc.
+  // Actions
   setSimulationMode: (enabled: boolean) => void;
   setExecutionSpeed: (speed: number) => void;
-  
-  // New: Engine-based packet management
-  syncPacketsFromEngine: (packets: FlowPacket[]) => void;
+  setAgentPhase: (agentId: string, phase: AgentPhase) => void;
+  getAgentPhase: (agentId: string) => AgentPhase;
+  onPacketArrived: (packetId: string) => void;
 }
 
 export const useExecutionStore = create<ExecutionState>((set, get) => ({
+  // Initial state
   isRunning: false,
-  activeNodeIds: [],
-  dataPackets: [],
-  errors: [],
   simulationMode: false,
   executionSpeed: 1,
+  activeNodeIds: [],
+  dataPackets: [],
   agentPhases: new Map(),
-
-  setIsRunning: (isRunning) => set({ isRunning }),
-  startNode: (id) => set((s) => ({ activeNodeIds: Array.from(new Set([...s.activeNodeIds, id])) })),
-  stopNode: (id) => set((s) => ({ activeNodeIds: s.activeNodeIds.filter((nid) => nid !== id) })),
-
-  addPacket: (connectionId) => {
-    const id = crypto.randomUUID();
-    set((s) => ({ 
-      dataPackets: [...s.dataPackets, { 
-        id, 
-        connectionId, 
-        progress: 0,
-        type: 'input' as const
-      }] 
-    }));
-    return id;
-  },
-
-  removePacket: (packetId) => set((s) => ({ 
-    dataPackets: s.dataPackets.filter(p => p.id !== packetId) 
-  })),
-
-  onPacketArrived: (packetId, _connections) => {
-    const state = get();
-    const packet = state.dataPackets.find(p => p.id === packetId);
-    
-    // Remove the packet
-    set((s) => ({ dataPackets: s.dataPackets.filter(p => p.id !== packetId) }));
-    
-    if (!packet) return;
-
-    // Notify the execution engine
-    executionEngine.handlePacketArrival(packetId);
-  },
-
-  clearExecution: () => set({ 
-    activeNodeIds: [], 
-    dataPackets: [], 
-    errors: [],
-    agentPhases: new Map()
-  }),
-
-  setAgentPhase: (agentId, phase) => set((s) => {
-    const newPhases = new Map(s.agentPhases);
-    newPhases.set(agentId, phase);
-    
-    // Update activeNodeIds based on phase
-    let newActiveIds = [...s.activeNodeIds];
-    if (phase === 'processing' || phase === 'querying') {
-      // Agent is active/thinking
-      if (!newActiveIds.includes(agentId)) {
-        newActiveIds.push(agentId);
-      }
-    } else {
-      // Agent is not actively processing
-      newActiveIds = newActiveIds.filter(id => id !== agentId);
-    }
-    
-    return { 
-      agentPhases: newPhases,
-      activeNodeIds: newActiveIds
-    };
-  }),
-
-  getAgentPhase: (agentId) => {
-    return get().agentPhases.get(agentId) || 'idle';
-  },
 
   setSimulationMode: (enabled) => {
     set({ simulationMode: enabled, isRunning: enabled });
-    
     if (enabled) {
       executionEngine.start();
     } else {
@@ -140,35 +66,69 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     executionEngine.setSpeed(speed);
   },
 
-  syncPacketsFromEngine: (packets) => {
-    const dataPackets: DataPacket[] = packets.map(p => ({
-      id: p.id,
-      connectionId: p.connectionId,
-      progress: p.progress,
-      type: p.type,
-      fromAgentId: p.fromAgentId
-    }));
-    set({ dataPackets });
-  }
+  setAgentPhase: (agentId, phase) => set((s) => {
+    const newPhases = new Map(s.agentPhases);
+    newPhases.set(agentId, phase);
+    
+    // Update activeNodeIds based on phase
+    // Agent is "active" when collecting or processing
+    let newActiveIds = s.activeNodeIds.filter(id => id !== agentId);
+    if (phase === 'collecting' || phase === 'processing') {
+      newActiveIds = [...newActiveIds, agentId];
+    }
+    
+    return { agentPhases: newPhases, activeNodeIds: newActiveIds };
+  }),
+
+  getAgentPhase: (agentId) => {
+    return get().agentPhases.get(agentId) || 'idle';
+  },
+
+  onPacketArrived: (packetId) => {
+    // Only remove packet from visual state
+    // Engine handles all logic internally via its own update loop
+    set((s) => ({ dataPackets: s.dataPackets.filter(p => p.id !== packetId) }));
+  },
 }));
 
-// Setup engine callbacks
+// ============ Engine Callbacks ============
+// Connect engine events to store updates
+// Engine is the SINGLE SOURCE OF TRUTH for packet state
+
 executionEngine.setCallbacks({
   onPacketCreated: (packet) => {
     const store = useExecutionStore.getState();
-    const existing = store.dataPackets.find(p => p.id === packet.id);
-    if (!existing) {
-      useExecutionStore.setState((s) => ({
-        dataPackets: [...s.dataPackets, {
-          id: packet.id,
-          connectionId: packet.connectionId,
-          progress: 0,
-          type: packet.type,
-          fromAgentId: packet.fromAgentId
-        }]
-      }));
-    }
+    // Avoid duplicates
+    if (store.dataPackets.some(p => p.id === packet.id)) return;
+    
+    useExecutionStore.setState((s) => ({
+      dataPackets: [...s.dataPackets, {
+        id: packet.id,
+        connectionId: packet.connectionId,
+        progress: 0,
+        type: packet.type,
+        fromAgentId: packet.fromAgentId,
+        isReverse: (packet as any).isReverse,
+      }]
+    }));
   },
+  
+  onPacketRemoved: (packetId) => {
+    // Engine says packet is done - remove from visual state
+    useExecutionStore.setState((s) => ({
+      dataPackets: s.dataPackets.filter(p => p.id !== packetId)
+    }));
+  },
+  
+  onPacketProgressUpdated: (packetId, progress) => {
+    // Sync progress from engine to store for visualization
+    useExecutionStore.setState((s) => ({
+      dataPackets: s.dataPackets.map(p => 
+        p.id === packetId ? { ...p, progress } : p
+      )
+    }));
+  },
+  
   onAgentPhaseChanged: (agentId, phase) => {
     useExecutionStore.getState().setAgentPhase(agentId, phase);
   }

@@ -2,12 +2,8 @@ import React, { memo } from 'react';
 import { useStore } from '../store/useStore';
 import type { Block, Connection } from '../types';
 import { getBlockCenter, getBlockDimensions } from '../lib/layoutUtils';
-
 import { cn } from '../lib/utils';
-
-interface ConnectionsLayerProps { }
-
-import { getBezierPath } from '../lib/animationUtils';
+import { getBezierPath } from '../lib/animationUtilsOptimized';
 
 const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, isHighlighted, draggingBlockId, draggingPos, scale, ghostOpacity }: {
   conn: Connection,
@@ -76,15 +72,7 @@ const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, i
         markerEnd={`url(#${markerId})`}
       />
 
-      {isFlow && (
-        <circle r="3" fill={color}>
-          <animateMotion
-            dur="1.5s"
-            repeatCount="indefinite"
-            path={pathD}
-          />
-        </circle>
-      )}
+{/* Removed: continuous flow animation - replaced by ExecutionLayer packets */}
 
       {conn.label && (
         <foreignObject
@@ -105,7 +93,7 @@ const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, i
   );
 });
 
-export const ConnectionsLayer: React.FC<ConnectionsLayerProps> = () => {
+export const ConnectionsLayer: React.FC = () => {
   const blocks = useStore((state) => state.blocks);
   const groups = useStore((state) => state.groups);
   const connections = useStore((state) => state.connections);
