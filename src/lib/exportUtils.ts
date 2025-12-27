@@ -1,8 +1,20 @@
 import { toPng } from 'html-to-image';
-import type { Block, Connection } from '../types';
+import type { Block, Connection, Group } from '../types';
 
-export const exportToJson = (data: { blocks: Block[], connections: Connection[] }) => {
-  const jsonString = JSON.stringify(data, null, 2);
+export interface ExportData {
+  groups?: Group[];
+  blocks: Block[];
+  connections: Connection[];
+}
+
+export const exportToJson = (data: ExportData) => {
+  // Ensure groups are always first in the output for readability
+  const orderedData = {
+    groups: data.groups || [],
+    blocks: data.blocks,
+    connections: data.connections
+  };
+  const jsonString = JSON.stringify(orderedData, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -14,7 +26,7 @@ export const exportToJson = (data: { blocks: Block[], connections: Connection[] 
   URL.revokeObjectURL(url);
 };
 
-export const importFromJson = (file: File): Promise<{ blocks: Block[], connections: Connection[] }> => {
+export const importFromJson = (file: File): Promise<ExportData> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {

@@ -48,6 +48,7 @@ export const Sidebar: React.FC = memo(() => {
   const layoutBoard = useStore((state) => state.layoutBoard);
   const blocks = useStore((state) => state.blocks);
   const connections = useStore((state) => state.connections);
+  const groups = useStore((state) => state.groups);
   const loadState = useStore((state) => state.loadState);
   const selectionPriority = useStore((state) => state.selectionPriority);
   const setSelectionPriority = useStore((state) => state.setSelectionPriority);
@@ -55,7 +56,7 @@ export const Sidebar: React.FC = memo(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExportJson = () => {
-    exportToJson({ blocks, connections });
+    exportToJson({ groups, blocks, connections });
   };
 
   const handleImportClick = () => {

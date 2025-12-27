@@ -125,49 +125,201 @@ src/
 
 ## 🤖 LLM Integration
 
-Generate workflow schemas using AI and import them directly:
+Generate workflow schemas using AI and import them directly into AI Kitchen.
 
-**Example Prompt:**
-> Analyze this multi-agent system and generate a JSON schema for AI Kitchen import.
+### Generation Prompt
 
-**JSON Schema:**
-```json
+Copy this prompt to your LLM to generate importable schemas:
+
+<details>
+<summary><b>📋 Click to expand full prompt</b></summary>
+
+```
+You are an AI system architect. Analyze the provided system description and generate a JSON schema for the "AI Kitchen" visual workflow editor.
+
+## OUTPUT FORMAT
+
+Generate valid JSON with this structure:
+
 {
+  "groups": [
+    {
+      "id": "unique-group-id",
+      "title": "Group Name",
+      "x": 0, "y": 0,
+      "width": 800, "height": 400,
+      "color": "blue|purple|green|orange|cyan|yellow|pink",
+      "collapsed": false
+    }
+  ],
   "blocks": [
     {
-      "id": "agent-1",
-      "type": "chef",
-      "title": "Research Agent",
-      "description": "Gathers information from sources",
-      "x": 100, "y": 100
-    },
-    {
-      "id": "data-1", 
-      "type": "input_file",
-      "title": "User Query",
-      "description": "Initial user request",
-      "x": 100, "y": 250
+      "id": "unique-block-id",
+      "type": "chef|ingredients|context_file|input_file|dish|note",
+      "title": "Block Title",
+      "description": "What this block does",
+      "x": 100, "y": 100,
+      "width": 280,
+      "height": 160,
+      "data": {
+        // Optional properties based on type
+      }
     }
   ],
   "connections": [
     {
-      "id": "conn-1",
-      "fromId": "data-1",
-      "toId": "agent-1",
-      "type": "flow"
+      "id": "unique-conn-id",
+      "fromId": "source-block-id",
+      "toId": "target-block-id",
+      "type": "flow|default|sync",
+      "label": "optional label"
+    }
+  ]
+}
+
+## BLOCK TYPES
+
+| Type | Purpose | Execution Role |
+|------|---------|----------------|
+| `chef` | AI Agent / LLM | Processes inputs → produces outputs |
+| `input_file` | User inputs, variables | TRIGGERS workflow (sends first packets) |
+| `context_file` | Reference docs, prompts | RESPONDS to agent queries |
+| `ingredients` | Data sources, APIs | Static reference (no execution) |
+| `dish` | Final outputs | RECEIVES results from agents |
+| `note` | Annotations | No execution, documentation only |
+
+## BLOCK DATA PROPERTIES (optional)
+
+For `chef` blocks:
+- model: "gpt-4o", "claude-3", etc.
+- temperature: 0.0-2.0
+- maxTokens: number
+
+For `context_file` / `input_file`:
+- filePath: "path/to/file.md"
+- content: "inline content if no file"
+- isExternal: true/false
+
+For `dish`:
+- outputFormat: "markdown|json|text|file"
+- savePath: "output/path"
+
+## CONNECTION TYPES
+
+| Type | Visual | Purpose |
+|------|--------|---------|
+| `flow` | Animated dashes | Main data flow (input→agent→output) |
+| `default` | Solid line | Context reference (context→agent) |
+| `sync` | Dotted line | Synchronization / dependencies |
+
+## LAYOUT GUIDELINES
+
+1. **Flow direction**: Left-to-right or top-to-bottom
+2. **Spacing**: ~300px horizontal, ~200px vertical between blocks
+3. **Groups**: Use to organize related blocks (scenarios, phases)
+4. **Context files**: Place on left side, agents center, outputs right
+5. **Notes**: Use as section headers above groups
+
+## EXECUTION FLOW RULES
+
+When simulating, the engine follows these rules:
+1. `input_file` blocks START the flow (send packets to connected agents)
+2. `chef` blocks RECEIVE inputs, may QUERY context files, then OUTPUT
+3. `context_file` blocks only RESPOND when queried by agents
+4. `dish` blocks RECEIVE final outputs
+
+Connection direction matters:
+- input_file → chef (input packet)
+- context_file → chef (will be queried, response goes back)
+- chef → chef (handoff packet)
+- chef → dish (output packet)
+
+## EXAMPLE
+
+System: "Research assistant that gathers info and writes summaries"
+
+{
+  "groups": [
+    {
+      "id": "g_main",
+      "title": "Research Pipeline",
+      "x": -50, "y": -50,
+      "width": 1000, "height": 400,
+      "color": "blue"
     }
   ],
-  "groups": []
+  "blocks": [
+    {
+      "id": "input_query",
+      "type": "input_file",
+      "title": "Research Query",
+      "description": "User's research question",
+      "x": 0, "y": 100
+    },
+    {
+      "id": "ctx_style",
+      "type": "context_file",
+      "title": "Writing Style Guide",
+      "description": "Tone, format, length requirements",
+      "x": 0, "y": 250,
+      "data": { "filePath": "prompts/style_guide.md" }
+    },
+    {
+      "id": "agent_researcher",
+      "type": "chef",
+      "title": "Research Agent",
+      "description": "Gathers and analyzes information",
+      "x": 350, "y": 100,
+      "data": { "model": "gpt-4o", "temperature": 0.3 }
+    },
+    {
+      "id": "agent_writer",
+      "type": "chef",
+      "title": "Writer Agent",
+      "description": "Creates polished summary",
+      "x": 650, "y": 100,
+      "data": { "model": "gpt-4o", "temperature": 0.7 }
+    },
+    {
+      "id": "output_summary",
+      "type": "dish",
+      "title": "Research Summary",
+      "description": "Final formatted output",
+      "x": 900, "y": 100,
+      "data": { "outputFormat": "markdown" }
+    }
+  ],
+  "connections": [
+    { "id": "c1", "fromId": "input_query", "toId": "agent_researcher", "type": "flow" },
+    { "id": "c2", "fromId": "ctx_style", "toId": "agent_writer", "type": "default" },
+    { "id": "c3", "fromId": "agent_researcher", "toId": "agent_writer", "type": "flow", "label": "findings" },
+    { "id": "c4", "fromId": "agent_writer", "toId": "output_summary", "type": "flow" }
+  ]
 }
+
+Now analyze the following system and generate the JSON schema:
 ```
 
+</details>
+
+### Quick Reference
+
 **Block Types:**
-- `chef` – AI Agent / LLM processor
-- `ingredients` – Raw data / general resources  
-- `context_file` – Static reference documents
-- `input_file` – Dynamic user inputs
-- `dish` – Output / Results
-- `note` – Comments
+| Type | Icon | Role |
+|------|------|------|
+| `chef` | 👨‍🍳 | AI Agent (processes data) |
+| `input_file` | 📥 | Workflow trigger (user inputs) |
+| `context_file` | 📄 | Reference docs (agent queries) |
+| `ingredients` | 🥕 | Static data sources |
+| `dish` | 🍽️ | Final outputs |
+| `note` | 📝 | Annotations |
+
+**Connection Types:**
+| Type | Style | Use |
+|------|-------|-----|
+| `flow` | ━━▶ | Main data flow |
+| `default` | ───▶ | Context reference |
+| `sync` | ┄┄▶ | Dependencies |
 
 ---
 
@@ -178,6 +330,7 @@ Generate workflow schemas using AI and import them directly:
 | [VISION.md](VISION.md) | Long-term vision and design philosophy |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture deep-dive |
 | [docs/FEATURES.md](docs/FEATURES.md) | Complete feature documentation |
+| [docs/JSON_SCHEMA.md](docs/JSON_SCHEMA.md) | Complete JSON import/export reference |
 | [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md) | Implementation progress |
 | [docs/technical/](docs/technical/) | Technical specifications |
 
