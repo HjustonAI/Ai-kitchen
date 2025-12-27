@@ -1,11 +1,33 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { useStore } from '../store/useStore';
+import { useExecutionStore } from '../store/useExecutionStore';
 import type { Block, Connection } from '../types';
 import { getBlockCenter, getBlockDimensions } from '../lib/layoutUtils';
 import { cn } from '../lib/utils';
 import { getBezierPath } from '../lib/animationUtilsOptimized';
 
-const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, isHighlighted, draggingBlockId, draggingPos, scale, ghostOpacity }: {
+// Packet type to glow color mapping
+const PACKET_GLOW_COLORS: Record<string, string> = {
+  input: '#3B82F6',     // blue-500
+  query: '#F97316',     // orange-500
+  response: '#22C55E',  // green-500
+  output: '#A855F7',    // purple-500
+  handoff: '#06B6D4',   // cyan-500
+};
+
+const ConnectionLine = memo(({ 
+  conn, 
+  fromBlock, 
+  toBlock, 
+  isSelected, 
+  isDimmed, 
+  isHighlighted, 
+  draggingBlockId, 
+  draggingPos, 
+  scale, 
+  ghostOpacity,
+  activePacket,
+}: {
   conn: Connection,
   fromBlock: Block,
   toBlock: Block,
@@ -15,7 +37,8 @@ const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, i
   draggingBlockId: string | null,
   draggingPos: { x: number; y: number } | null,
   scale: number,
-  ghostOpacity?: number
+  ghostOpacity?: number,
+  activePacket?: { type: string; progress: number } | null,
 }) => {
   const selectConnection = useStore((state) => state.selectConnection);
 
@@ -46,10 +69,14 @@ const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, i
   else if (isInputSource) dashArray = '4,4';
 
   const pathD = getBezierPath(start, end);
+  
+  // Glow effect when packet is traveling through this connection
+  const glowColor = activePacket ? PACKET_GLOW_COLORS[activePacket.type] || '#3B82F6' : null;
+  const glowFilterId = activePacket ? `glow-${activePacket.type}` : null;
 
   return (
     <g
-      className={cn("pointer-events-auto cursor-pointer transition-opacity duration-200", isDimmed && !ghostOpacity && "opacity-20")}
+      className={cn("pointer-events-auto cursor-pointer transition-opacity duration-200", isDimmed && !ghostOpacity && !activePacket && "opacity-20")}
       style={{ opacity: ghostOpacity }}
       onClick={(e) => {
         e.stopPropagation();
@@ -63,12 +90,26 @@ const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, i
         strokeWidth="20"
       />
 
+      {/* Active packet glow layer (behind main line) */}
+      {activePacket && glowColor && (
+        <path
+          d={pathD}
+          fill="none"
+          stroke={glowColor}
+          strokeWidth={width + 8}
+          strokeLinecap="round"
+          filter={`url(#${glowFilterId})`}
+          className="animate-pulse"
+          style={{ opacity: 0.6 }}
+        />
+      )}
+
       <path
         d={pathD}
         fill="none"
-        stroke={color}
-        strokeWidth={width}
-        strokeDasharray={dashArray}
+        stroke={activePacket ? glowColor! : color}
+        strokeWidth={activePacket ? width + 1 : width}
+        strokeDasharray={activePacket ? 'none' : dashArray}
         markerEnd={`url(#${markerId})`}
       />
 
@@ -106,6 +147,25 @@ export const ConnectionsLayer: React.FC = () => {
   const scale = useStore((state) => state.view.scale);
   const hoveredBlockId = useStore((state) => state.hoveredBlockId);
   const selectedBlockIds = useStore((state) => state.selectedBlockIds);
+  
+  // Subscribe to active packets for connection glow effects
+  const dataPackets = useExecutionStore((state) => state.dataPackets);
+  
+  // Build map of connectionId -> active packet info for glow effects
+  const activeConnectionPackets = useMemo(() => {
+    const map = new Map<string, { type: string; progress: number }>();
+    dataPackets.forEach(packet => {
+      // Only track packets that are actively traveling (not at endpoints)
+      if (packet.progress > 0.02 && packet.progress < 0.98) {
+        const existing = map.get(packet.connectionId);
+        // Keep the packet that's furthest along
+        if (!existing || packet.progress > existing.progress) {
+          map.set(packet.connectionId, { type: packet.type, progress: packet.progress });
+        }
+      }
+    });
+    return map;
+  }, [dataPackets]);
 
   // Optimize block lookup
   const blockMap = React.useMemo(() => {
@@ -226,6 +286,43 @@ export const ConnectionsLayer: React.FC = () => {
         >
           <polygon points="0 0, 10 3.5, 0 7" fill="#60a5fa" />
         </marker>
+        
+        {/* Glow filters for active packet connections */}
+        <filter id="glow-input" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="glow-query" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="glow-response" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="glow-output" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="glow-handoff" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
       </defs>
 
       {Array.from(connectionGroups.entries()).map(([key, groupConns]) => {
@@ -275,6 +372,16 @@ export const ConnectionsLayer: React.FC = () => {
 
         const isGhost = isBundleContext && !isBundleActive;
         const isDimmed = highlightedConnectionIds.length > 0 && !isBundleHighlighted;
+        
+        // Check if any connection in this bundle has an active packet
+        let bundleActivePacket: { type: string; progress: number } | null = null;
+        for (const conn of groupConns) {
+          const packet = activeConnectionPackets.get(conn.id);
+          if (packet) {
+            bundleActivePacket = packet;
+            break;
+          }
+        }
 
         return (
           <ConnectionLine
@@ -289,6 +396,7 @@ export const ConnectionsLayer: React.FC = () => {
             draggingPos={draggingPos}
             scale={scale}
             ghostOpacity={isGhost ? 0.05 : undefined}
+            activePacket={bundleActivePacket}
           />
         );
       })}

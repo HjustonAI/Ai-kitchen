@@ -87,6 +87,14 @@ export class ExecutionEngine {
   onPacketRemoved?: (packetId: string) => void;
   onPacketProgressUpdated?: (packetId: string, progress: number) => void;
   onAgentPhaseChanged?: (agentId: string, phase: AgentPhase) => void;
+  
+  // Block state callbacks (for visual feedback)
+  onContextStateChanged?: (blockId: string, state: 'idle' | 'receiving' | 'processing' | 'sending') => void;
+  onInputStateChanged?: (blockId: string, state: 'idle' | 'sending') => void;
+  onDishStateChanged?: (blockId: string, state: 'idle' | 'receiving' | 'complete') => void;
+  
+  // Collecting progress callback (for UI display)
+  onCollectingProgress?: (agentId: string, received: number, total: number) => void;
 
   // ============ Setup ============
 
@@ -332,8 +340,18 @@ export class ExecutionEngine {
         
         console.log(`[Query] Arrived at context ${contextBlockId.slice(0,8)} from agent ${requestingAgentId?.slice(0,8)}`);
         
+        // Visual feedback: context file receiving query
+        this.onContextStateChanged?.(contextBlockId, 'receiving');
+        
         if (requestingAgentId) {
-          this.sendContextResponse(contextBlockId, requestingAgentId);
+          // Brief processing delay then send response
+          setTimeout(() => {
+            this.onContextStateChanged?.(contextBlockId, 'processing');
+          }, 100);
+          
+          setTimeout(() => {
+            this.sendContextResponse(contextBlockId, requestingAgentId);
+          }, 200);
         }
         break;
       }
@@ -353,6 +371,11 @@ export class ExecutionEngine {
           
           console.log(`[Response] Received! Remaining pending: ${agent.pendingContexts.size}`);
           
+          // Notify collecting progress for UI display
+          const total = agent.contextBlockIds.size;
+          const received = agent.receivedContexts.size;
+          this.onCollectingProgress?.(agent.id, received, total);
+          
           // Check if ALL responses received → transition to processing
           if (agent.pendingContexts.size === 0) {
             this.transitionAgent(agent, 'processing');
@@ -361,10 +384,22 @@ export class ExecutionEngine {
         break;
       }
 
-      case 'output':
+      case 'output': {
         // Output arrived at dish/assets - task complete
-        // Visual celebration could be triggered here
+        const dishBlockId = connection.toId;
+        
+        // Visual feedback: dish receiving then complete
+        this.onDishStateChanged?.(dishBlockId, 'receiving');
+        
+        setTimeout(() => {
+          this.onDishStateChanged?.(dishBlockId, 'complete');
+        }, 300);
+        
+        setTimeout(() => {
+          this.onDishStateChanged?.(dishBlockId, 'idle');
+        }, 2000);
         break;
+      }
     }
 
     // Remove packet after processing and notify store
@@ -386,9 +421,18 @@ export class ExecutionEngine {
         if (triggeredAgents.has(conn.toId)) continue;
         triggeredAgents.add(conn.toId);
         
+        const inputId = input.id; // Capture for closure
         setTimeout(() => {
           if (this.isRunning) {
+            // Visual feedback: input file sending
+            this.onInputStateChanged?.(inputId, 'sending');
+            
             this.createPacket(conn.id, 'input');
+            
+            // Reset to idle after brief visual
+            setTimeout(() => {
+              this.onInputStateChanged?.(inputId, 'idle');
+            }, 500);
           }
         }, delay);
         delay += 800;
@@ -430,6 +474,15 @@ export class ExecutionEngine {
 
     if (responseConnection) {
       console.log(`[Context ${contextBlockId.slice(0,8)}] Sending response to Agent ${requestingAgentId.slice(0,8)}`);
+      
+      // Visual feedback: context file sending response
+      this.onContextStateChanged?.(contextBlockId, 'sending');
+      
+      // Reset to idle after brief visual
+      setTimeout(() => {
+        this.onContextStateChanged?.(contextBlockId, 'idle');
+      }, 500);
+      
       // Response travels normally along Context → Agent connection
       const packet = this.createPacket(responseConnection.id, 'response', requestingAgentId);
       packet.fromAgentId = requestingAgentId;
@@ -504,6 +557,17 @@ export class ExecutionEngine {
     agent.phaseStartTime = Date.now();
     
     console.log(`[Agent ${agent.id.slice(0,8)}] ${oldPhase} → ${newPhase}`);
+    
+    // Notify collecting progress when entering collecting phase
+    if (newPhase === 'collecting') {
+      const total = agent.contextBlockIds.size;
+      this.onCollectingProgress?.(agent.id, 0, total);
+    }
+    
+    // Clear collecting progress when leaving collecting phase  
+    if (oldPhase === 'collecting' && newPhase !== 'collecting') {
+      this.onCollectingProgress?.(agent.id, 0, 0); // Reset
+    }
     
     this.onAgentPhaseChanged?.(agent.id, newPhase);
   }

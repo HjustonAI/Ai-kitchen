@@ -1,9 +1,11 @@
-import React, { memo, useRef } from 'react';
-import { ChefHat, Utensils, StickyNote, Trash2, RotateCcw, Download, Upload, Image as ImageIcon, Layout, Wand2, MousePointer2, BoxSelect, FileText, Keyboard } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React, { memo, useRef, useState } from 'react';
+import { ChefHat, Utensils, StickyNote, Trash2, RotateCcw, Download, Upload, Image as ImageIcon, Layout, Wand2, MousePointer2, BoxSelect, FileText, Keyboard, Activity, ChevronDown, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
+import { useExecutionStore } from '../store/useExecutionStore';
 import { exportToJson, importFromJson, exportToPng } from '../lib/exportUtils';
+import { SidebarExecutionSection } from './SidebarExecutionSection';
 
 const SidebarButton = memo(({ 
   icon: Icon, 
@@ -88,7 +90,7 @@ export const Sidebar: React.FC = memo(() => {
   };
 
   return (
-    <div className="w-72 glass-panel border-r-0 z-50 flex flex-col p-6 h-full relative">
+    <div className="w-72 glass-panel border-r-0 z-50 flex flex-col h-full relative">
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -98,19 +100,24 @@ export const Sidebar: React.FC = memo(() => {
       />
       <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-white/10 to-transparent" />
       
-      <motion.div 
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="mb-8"
-      >
-        <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-kitchen-accent to-white tracking-wider">
-          AI KITCHEN
-        </h1>
-        <p className="text-xs text-white/40 mt-1 font-mono">SYSTEM DESIGN BOARD</p>
-      </motion.div>
+      {/* Header - fixed */}
+      <div className="p-6 pb-0">
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="mb-6"
+        >
+          <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-kitchen-accent to-white tracking-wider">
+            AI KITCHEN
+          </h1>
+          <p className="text-xs text-white/40 mt-1 font-mono">SYSTEM DESIGN BOARD</p>
+        </motion.div>
+      </div>
       
-      <div className="flex flex-col gap-3">
-        <SidebarButton 
+      {/* Scrollable middle section */}
+      <div className="flex-1 overflow-y-auto px-6 pb-4">
+        <div className="flex flex-col gap-3">
+          <SidebarButton 
           icon={ChefHat} 
           label="Szef Kuchni" 
           onClick={() => addBlock('chef')}
@@ -153,9 +160,16 @@ export const Sidebar: React.FC = memo(() => {
           colorClass="text-blue-400 hover:border-blue-400/50 hover:shadow-[0_0_15px_rgba(96,165,250,0.15)]"
           delay={0.5}
         />
+        </div>
+      
+        {/* Execution Section - shows when simulation is active */}
+        <AnimatePresence>
+          <SidebarExecutionSection />
+        </AnimatePresence>
       </div>
-
-      <div className="mt-auto pt-6 border-t border-white/5 flex flex-col gap-2">
+      
+      {/* Fixed footer */}
+      <div className="px-6 py-4 border-t border-white/5 flex flex-col gap-2">
         {/* Selection Priority Toggle */}
         <div className="flex items-center justify-between bg-white/5 p-1 rounded-lg mb-2 border border-white/5">
           <button

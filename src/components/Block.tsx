@@ -1,12 +1,12 @@
 import React, { useRef, useState, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
 import Draggable from 'react-draggable';
-import { ChefHat, Scroll, Utensils, StickyNote, X, GripVertical, ExternalLink, FileText, Keyboard, Eye, Loader2, Search, CheckCircle2 } from 'lucide-react';
+import { ChefHat, Scroll, Utensils, StickyNote, X, GripVertical, ExternalLink, FileText, Keyboard, Eye, Loader2, Search, CheckCircle2, Send, Download } from 'lucide-react';
 import TextareaAutosize from 'react-textarea-autosize';
 import type { Block as BlockType } from '../types';
 import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
-import { useExecutionStore } from '../store/useExecutionStore';
+import { useExecutionStore, type ContextBlockState, type InputBlockState, type DishBlockState } from '../store/useExecutionStore';
 import type { AgentPhase } from '../lib/executionEngineV2';
 
 // --- Types & Interfaces ---
@@ -32,6 +32,10 @@ interface BlockComponentProps {
   isActive?: boolean;
   agentPhase?: AgentPhase;
   handlers: BlockHandlers;
+  // Block execution states
+  contextState?: ContextBlockState;
+  inputState?: InputBlockState;
+  dishState?: DishBlockState;
 }
 
 // --- Sub-Components ---
@@ -87,6 +91,9 @@ const ChefBlock = ({ block, isSelected, isActive, agentPhase, handlers }: BlockC
   const blocks = useStore((state) => state.blocks);
   const setHoveredBlockId = useStore((state) => state.setHoveredBlockId);
   const focusBlock = useStore((state) => state.focusBlock);
+  
+  // Get collecting progress for this agent
+  const collectingProgress = useExecutionStore((state) => state.collectingProgress.get(block.id));
 
   const ingredients = React.useMemo(() => {
     return connections
@@ -114,9 +121,16 @@ const ChefBlock = ({ block, isSelected, isActive, agentPhase, handlers }: BlockC
   // collecting = requesting & receiving context
   // processing = thinking
   // outputting = sending results
+  const getCollectingLabel = () => {
+    if (collectingProgress && collectingProgress.total > 0) {
+      return `Collecting ${collectingProgress.received}/${collectingProgress.total}...`;
+    }
+    return 'Collecting context...';
+  };
+  
   const phaseConfig = {
     idle: { icon: null, label: '', color: '' },  // No indicator when waiting
-    collecting: { icon: Search, label: 'Collecting context...', color: 'text-orange-400' },
+    collecting: { icon: Search, label: getCollectingLabel(), color: 'text-orange-400' },
     processing: { icon: Loader2, label: 'Processing...', color: 'text-cyan-400' },
     outputting: { icon: CheckCircle2, label: 'Sending output...', color: 'text-green-400' },
   };
@@ -307,118 +321,212 @@ const IngredientsBlock = ({ block, isSelected, handlers }: BlockComponentProps) 
   </div>
 );
 
-const ContextFileBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
-  <div className={cn(
-    "w-64 rounded-lg border bg-slate-50/95 backdrop-blur-md shadow-lg transition-all duration-200 text-slate-800 group",
-    isSelected ? "border-blue-400 ring-2 ring-blue-400/20" : "border-slate-200 hover:border-slate-300"
-  )}>
-    <div className="h-1.5 w-full bg-blue-400 rounded-t-lg drag-handle" />
-    <div className="p-3">
-      <div className="flex items-start justify-between gap-2 mb-2 drag-handle">
-        <div className="flex items-center gap-2 text-blue-600">
-          <FileText size={16} />
-          <span className="text-xs font-bold uppercase tracking-wider">Context File</span>
+const ContextFileBlock = ({ block, isSelected, contextState, handlers }: BlockComponentProps) => {
+  // Context state visual config
+  const stateConfig = {
+    receiving: { 
+      borderClass: 'border-orange-400 ring-2 ring-orange-400/30', 
+      iconClass: 'text-orange-500 animate-pulse',
+      label: 'Receiving query...',
+    },
+    processing: { 
+      borderClass: 'border-yellow-400 ring-2 ring-yellow-400/30', 
+      iconClass: 'text-yellow-500',
+      label: 'Reading...',
+    },
+    sending: { 
+      borderClass: 'border-green-400 ring-2 ring-green-400/30 shadow-[0_0_20px_rgba(34,197,94,0.3)]', 
+      iconClass: 'text-green-500',
+      label: 'Sending response...',
+    },
+  };
+  
+  const currentStateConfig = contextState && contextState !== 'idle' ? stateConfig[contextState] : null;
+
+  return (
+    <div className={cn(
+      "w-64 rounded-lg border bg-slate-50/95 backdrop-blur-md shadow-lg transition-all duration-200 text-slate-800 group relative",
+      currentStateConfig?.borderClass,
+      isSelected && !currentStateConfig ? "border-blue-400 ring-2 ring-blue-400/20" : !currentStateConfig && "border-slate-200 hover:border-slate-300"
+    )}>
+      {/* State indicator */}
+      {currentStateConfig && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute -top-7 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-900/90 text-white border border-slate-700 backdrop-blur-sm whitespace-nowrap"
+        >
+          {contextState === 'receiving' && <Download size={10} className="animate-bounce" />}
+          {contextState === 'processing' && <Loader2 size={10} className="animate-spin" />}
+          {contextState === 'sending' && <Send size={10} />}
+          <span>{currentStateConfig.label}</span>
+        </motion.div>
+      )}
+      
+      <div className={cn(
+        "h-1.5 w-full rounded-t-lg drag-handle transition-colors",
+        contextState === 'receiving' ? 'bg-orange-400' :
+        contextState === 'processing' ? 'bg-yellow-400' :
+        contextState === 'sending' ? 'bg-green-400' : 'bg-blue-400'
+      )} />
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2 mb-2 drag-handle">
+          <div className={cn("flex items-center gap-2", currentStateConfig?.iconClass || "text-blue-600")}>
+            <FileText size={16} />
+            <span className="text-xs font-bold uppercase tracking-wider">Context File</span>
+          </div>
+          <BlockControls handlers={handlers} dark={true} />
         </div>
-        <BlockControls handlers={handlers} dark={true} />
+
+        <input
+          className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder-slate-400 mb-2"
+          value={block.title}
+          onChange={(e) => handlers.onTitleChange(e.target.value)}
+          onBlur={handlers.onTitleBlur}
+          placeholder="File Name"
+        />
+
+        <div className="relative">
+          <div className="absolute left-0 top-2 bottom-0 w-0.5 bg-slate-200" />
+          <TextareaAutosize
+            className="w-full bg-transparent pl-3 text-sm text-slate-600 outline-none resize-none font-mono"
+            value={block.description}
+            onChange={(e) => handlers.onDescriptionChange(e.target.value)}
+            onBlur={handlers.onDescriptionBlur}
+            placeholder="Paste context content..."
+            minRows={2}
+          />
+        </div>
       </div>
+    </div>
+  );
+};
 
-      <input
-        className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder-slate-400 mb-2"
-        value={block.title}
-        onChange={(e) => handlers.onTitleChange(e.target.value)}
-        onBlur={handlers.onTitleBlur}
-        placeholder="File Name"
-      />
+const InputFileBlock = ({ block, isSelected, inputState, handlers }: BlockComponentProps) => {
+  const isSending = inputState === 'sending';
+  
+  return (
+    <div className={cn(
+      "w-64 rounded-lg border bg-slate-50/95 backdrop-blur-md shadow-lg transition-all duration-200 text-slate-800 group relative",
+      isSending && "border-blue-500 ring-2 ring-blue-500/30 shadow-[0_0_25px_rgba(59,130,246,0.4)]",
+      isSelected && !isSending ? "border-green-400 ring-2 ring-green-400/20" : !isSending && "border-slate-200 hover:border-slate-300"
+    )}>
+      {/* Sending indicator */}
+      {isSending && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute -top-7 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500 text-white whitespace-nowrap"
+        >
+          <Send size={10} className="animate-pulse" />
+          <span>Sending input...</span>
+        </motion.div>
+      )}
+      
+      <div className={cn(
+        "h-1.5 w-full rounded-t-lg drag-handle transition-colors",
+        isSending ? 'bg-blue-500 animate-pulse' : 'bg-green-400'
+      )} />
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2 mb-2 drag-handle">
+          <div className={cn("flex items-center gap-2", isSending ? "text-blue-600" : "text-green-600")}>
+            <Keyboard size={16} className={isSending ? "animate-pulse" : ""} />
+            <span className="text-xs font-bold uppercase tracking-wider">Input File</span>
+          </div>
+          <BlockControls handlers={handlers} dark={true} />
+        </div>
 
-      <div className="relative">
-        <div className="absolute left-0 top-2 bottom-0 w-0.5 bg-slate-200" />
+        <input
+          className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder-slate-400 mb-2"
+          value={block.title}
+          onChange={(e) => handlers.onTitleChange(e.target.value)}
+          onBlur={handlers.onTitleBlur}
+          placeholder="Input Name"
+        />
+
+        <div className="relative">
+          <div className="absolute left-0 top-2 bottom-0 w-0.5 bg-slate-200" />
+          <TextareaAutosize
+            className="w-full bg-transparent pl-3 text-sm text-slate-600 outline-none resize-none font-mono"
+            value={block.description}
+            onChange={(e) => handlers.onDescriptionChange(e.target.value)}
+            onBlur={handlers.onDescriptionBlur}
+            placeholder="Paste input content..."
+            minRows={2}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DishBlock = ({ block, isSelected, isActive, dishState, handlers }: BlockComponentProps) => {
+  const isReceiving = dishState === 'receiving';
+  const isComplete = dishState === 'complete';
+  
+  return (
+    <div className={cn(
+      "w-72 rounded-2xl border-2 bg-gradient-to-br from-purple-900/90 to-slate-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 group relative",
+      isReceiving && "ring-4 ring-purple-400/60 shadow-[0_0_40px_rgba(168,85,247,0.5)] scale-102 border-purple-400",
+      isComplete && "ring-4 ring-green-400/60 shadow-[0_0_50px_rgba(34,197,94,0.6)] scale-105 border-green-400",
+      isActive && !isReceiving && !isComplete && "ring-4 ring-kitchen-neon-purple/50 shadow-[0_0_50px_rgba(188,19,254,0.6)] scale-105 border-kitchen-neon-purple",
+      isSelected && !isActive && !isReceiving && !isComplete ? "border-kitchen-neon-purple shadow-[0_0_30px_-5px_rgba(188,19,254,0.4)]" : !isActive && !isReceiving && !isComplete && "border-purple-500/30 hover:border-purple-500/50"
+    )}>
+      {/* State indicator */}
+      {(isReceiving || isComplete) && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={cn(
+            "absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap",
+            isReceiving && "bg-purple-500 text-white",
+            isComplete && "bg-green-500 text-white"
+          )}
+        >
+          {isReceiving && <Download size={12} className="animate-bounce" />}
+          {isComplete && <CheckCircle2 size={12} />}
+          <span>{isReceiving ? 'Receiving output...' : 'Complete!'}</span>
+        </motion.div>
+      )}
+      
+      <div className="p-4 text-center relative drag-handle">
+        <div className="absolute right-2 top-2">
+          <BlockControls handlers={handlers} />
+        </div>
+
+        <div className={cn(
+          "mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-3 ring-1 transition-all",
+          isComplete 
+            ? "bg-green-500/30 text-green-400 ring-green-400/50 shadow-[0_0_20px_rgba(34,197,94,0.5)]" 
+            : isReceiving 
+              ? "bg-purple-500/30 text-purple-300 ring-purple-400/50 animate-pulse"
+              : "bg-kitchen-neon-purple/20 text-kitchen-neon-purple ring-kitchen-neon-purple/50 shadow-[0_0_15px_rgba(188,19,254,0.3)]"
+        )}>
+          {isComplete ? <CheckCircle2 size={24} /> : <Utensils size={24} />}
+        </div>
+
+        <input
+          className="w-full bg-transparent text-center text-lg font-bold text-white outline-none placeholder-white/30 mb-1"
+          value={block.title}
+          onChange={(e) => handlers.onTitleChange(e.target.value)}
+          onBlur={handlers.onTitleBlur}
+          placeholder="Result Name"
+        />
+
+        <div className="h-px w-16 bg-purple-500/30 mx-auto my-2" />
+
         <TextareaAutosize
-          className="w-full bg-transparent pl-3 text-sm text-slate-600 outline-none resize-none font-mono"
+          className="w-full bg-transparent text-center text-xs text-purple-200/80 outline-none resize-none"
           value={block.description}
           onChange={(e) => handlers.onDescriptionChange(e.target.value)}
           onBlur={handlers.onDescriptionBlur}
-          placeholder="Paste context content..."
-          minRows={2}
+          placeholder="Expected output..."
+          minRows={1}
         />
       </div>
     </div>
-  </div>
-);
-
-const InputFileBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
-  <div className={cn(
-    "w-64 rounded-lg border bg-slate-50/95 backdrop-blur-md shadow-lg transition-all duration-200 text-slate-800 group",
-    isSelected ? "border-green-400 ring-2 ring-green-400/20" : "border-slate-200 hover:border-slate-300"
-  )}>
-    <div className="h-1.5 w-full bg-green-400 rounded-t-lg drag-handle" />
-    <div className="p-3">
-      <div className="flex items-start justify-between gap-2 mb-2 drag-handle">
-        <div className="flex items-center gap-2 text-green-600">
-          <Keyboard size={16} />
-          <span className="text-xs font-bold uppercase tracking-wider">Input File</span>
-        </div>
-        <BlockControls handlers={handlers} dark={true} />
-      </div>
-
-      <input
-        className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder-slate-400 mb-2"
-        value={block.title}
-        onChange={(e) => handlers.onTitleChange(e.target.value)}
-        onBlur={handlers.onTitleBlur}
-        placeholder="Input Name"
-      />
-
-      <div className="relative">
-        <div className="absolute left-0 top-2 bottom-0 w-0.5 bg-slate-200" />
-        <TextareaAutosize
-          className="w-full bg-transparent pl-3 text-sm text-slate-600 outline-none resize-none font-mono"
-          value={block.description}
-          onChange={(e) => handlers.onDescriptionChange(e.target.value)}
-          onBlur={handlers.onDescriptionBlur}
-          placeholder="Paste input content..."
-          minRows={2}
-        />
-      </div>
-    </div>
-  </div>
-);
-
-const DishBlock = ({ block, isSelected, isActive, handlers }: BlockComponentProps) => (
-  <div className={cn(
-    "w-72 rounded-2xl border-2 bg-gradient-to-br from-purple-900/90 to-slate-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 group",
-    isActive && "ring-4 ring-kitchen-neon-purple/50 shadow-[0_0_50px_rgba(188,19,254,0.6)] scale-105 border-kitchen-neon-purple",
-    isSelected && !isActive ? "border-kitchen-neon-purple shadow-[0_0_30px_-5px_rgba(188,19,254,0.4)]" : "border-purple-500/30 hover:border-purple-500/50"
-  )}>
-    <div className="p-4 text-center relative drag-handle">
-      <div className="absolute right-2 top-2">
-        <BlockControls handlers={handlers} />
-      </div>
-
-      <div className="mx-auto w-12 h-12 rounded-full bg-kitchen-neon-purple/20 flex items-center justify-center text-kitchen-neon-purple mb-3 ring-1 ring-kitchen-neon-purple/50 shadow-[0_0_15px_rgba(188,19,254,0.3)]">
-        <Utensils size={24} />
-      </div>
-
-      <input
-        className="w-full bg-transparent text-center text-lg font-bold text-white outline-none placeholder-white/30 mb-1"
-        value={block.title}
-        onChange={(e) => handlers.onTitleChange(e.target.value)}
-        onBlur={handlers.onTitleBlur}
-        placeholder="Result Name"
-      />
-
-      <div className="h-px w-16 bg-purple-500/30 mx-auto my-2" />
-
-      <TextareaAutosize
-        className="w-full bg-transparent text-center text-xs text-purple-200/80 outline-none resize-none"
-        value={block.description}
-        onChange={(e) => handlers.onDescriptionChange(e.target.value)}
-        onBlur={handlers.onDescriptionBlur}
-        placeholder="Expected output..."
-        minRows={1}
-      />
-    </div>
-  </div>
-);
+  );
+};
 
 const NoteBlock = ({ block, isSelected, handlers }: BlockComponentProps) => (
   <div className={cn(
@@ -582,12 +690,28 @@ export const Block: React.FC<BlockProps> = memo(({ block, scale }) => {
 
   const activeNodeIds = useExecutionStore((state) => state.activeNodeIds);
   const agentPhases = useExecutionStore((state) => state.agentPhases);
+  const contextStates = useExecutionStore((state) => state.contextStates);
+  const inputStates = useExecutionStore((state) => state.inputStates);
+  const dishStates = useExecutionStore((state) => state.dishStates);
+  
   const isActive = activeNodeIds.includes(block.id);
   const agentPhase = agentPhases.get(block.id) || 'idle';
+  const contextState = contextStates.get(block.id);
+  const inputState = inputStates.get(block.id);
+  const dishState = dishStates.get(block.id);
 
   // Render specific block type with Level-of-Detail (LOD)
   const renderBlockContent = () => {
-    const props = { block: { ...block, title, description }, isSelected, isActive, handlers, agentPhase };
+    const props = { 
+      block: { ...block, title, description }, 
+      isSelected, 
+      isActive, 
+      handlers, 
+      agentPhase,
+      contextState,
+      inputState,
+      dishState,
+    };
 
     // LOD thresholds: minimal (<0.4), compact (0.4 - 0.7), full (>=0.7)
     if (scale < 0.4) {
