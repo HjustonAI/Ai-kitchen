@@ -7,8 +7,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const getBlockDimensions = (type: BlockType, scale: number = 1) => {
-  if (scale < 0.3) return { width: 56, height: 32 };
-  if (scale < 0.6) return type === 'note' ? { width: 176, height: 176 } : { width: 176, height: 48 };
+  if (scale < 0.4) return { width: 56, height: 32 };
+  if (scale < 0.7) return type === 'note' ? { width: 176, height: 176 } : { width: 176, height: 48 };
   switch (type) {
     case 'chef': return { width: 320, height: 180 };
     case 'ingredients': return { width: 256, height: 160 };

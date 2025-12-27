@@ -54,7 +54,7 @@ const getBlockCenter = (block: Block, draggingBlockId: string | null, draggingPo
   };
 };
 
-const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, isHighlighted, draggingBlockId, draggingPos, scale }: { 
+const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, isHighlighted, draggingBlockId, draggingPos, scale, ghostOpacity }: { 
   conn: Connection, 
   fromBlock: Block, 
   toBlock: Block, 
@@ -63,7 +63,8 @@ const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, i
   isHighlighted: boolean,
   draggingBlockId: string | null,
   draggingPos: { x: number; y: number } | null,
-  scale: number
+  scale: number,
+  ghostOpacity?: number
 }) => {
   const selectConnection = useStore((state) => state.selectConnection);
   
@@ -89,7 +90,10 @@ const ConnectionLine = memo(({ conn, fromBlock, toBlock, isSelected, isDimmed, i
   const pathD = `M ${start.x} ${start.y} C ${start.x + controlOffset} ${start.y}, ${end.x - controlOffset} ${end.y}, ${end.x} ${end.y}`;
 
   return (
-    <g className={cn("pointer-events-auto cursor-pointer transition-opacity duration-200", isDimmed && "opacity-20")} onClick={(e) => {
+    <g 
+      className={cn("pointer-events-auto cursor-pointer transition-opacity duration-200", isDimmed && !ghostOpacity && "opacity-20")} 
+      style={{ opacity: ghostOpacity }}
+      onClick={(e) => {
       e.stopPropagation();
       selectConnection(conn.id);
     }}>
@@ -158,18 +162,27 @@ export const ConnectionsLayer: React.FC<ConnectionsLayerProps> = () => {
     return new Map(blocks.map(b => [b.id, b]));
   }, [blocks]);
 
-  const getEffectiveBlock = (blockId: string): Block | null => {
+  const getEffectiveBlock = React.useCallback((blockId: string): Block | null => {
     const block = blockMap.get(blockId);
     if (!block) return null;
 
     // Check if block is in a collapsed group
-    const collapsedGroup = groups.find(g => 
-      g.collapsed && 
-      (block.x + (block.width || 0)/2) >= g.x && 
-      (block.x + (block.width || 0)/2) <= g.x + g.width &&
-      (block.y + (block.height || 0)/2) >= g.y && 
-      (block.y + (block.height || 0)/2) <= g.y + g.height
-    );
+    const collapsedGroup = groups.find(g => {
+      if (!g.collapsed) return false;
+      
+      const dims = getBlockDimensions(block.type, 1);
+      const width = block.width || dims.width;
+      const height = block.height || dims.height;
+      const bCenterX = block.x + width / 2;
+      const bCenterY = block.y + height / 2;
+
+      return (
+        bCenterX >= g.x &&
+        bCenterX <= g.x + g.width &&
+        bCenterY >= g.y &&
+        bCenterY <= g.y + g.height
+      );
+    });
 
     if (collapsedGroup) {
       return {
@@ -183,13 +196,32 @@ export const ConnectionsLayer: React.FC<ConnectionsLayerProps> = () => {
     }
 
     return block;
-  };
+  }, [blockMap, groups]);
 
   const tempConnection = connectingSourceId && tempConnectionPos ? {
     fromId: connectingSourceId,
     toX: tempConnectionPos.x,
     toY: tempConnectionPos.y
   } : null;
+
+  // Group connections by visual path to prevent opacity stacking
+  const connectionGroups = React.useMemo(() => {
+    const groups = new Map<string, Connection[]>();
+    connections.forEach(conn => {
+      const fromBlock = getEffectiveBlock(conn.fromId);
+      const toBlock = getEffectiveBlock(conn.toId);
+      
+      if (!fromBlock || !toBlock) return;
+      if (fromBlock.id === toBlock.id) return; // Internal to collapsed group
+
+      const key = `${fromBlock.id}-${toBlock.id}`;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(conn);
+    });
+    return groups;
+  }, [connections, getEffectiveBlock]);
 
   return (
     <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible">
@@ -226,61 +258,67 @@ export const ConnectionsLayer: React.FC<ConnectionsLayerProps> = () => {
         </marker>
       </defs>
 
-      {connections.map(conn => {
-        const fromBlock = getEffectiveBlock(conn.fromId);
-        const toBlock = getEffectiveBlock(conn.toId);
-        
-        if (!fromBlock || !toBlock) return null;
-        
-        // Don't render connections that are internal to a collapsed group
-        if (fromBlock.id === toBlock.id) return null;
+      {Array.from(connectionGroups.entries()).map(([key, groupConns]) => {
+        const representativeConn = groupConns[0];
+        const fromBlock = getEffectiveBlock(representativeConn.fromId)!;
+        const toBlock = getEffectiveBlock(representativeConn.toId)!;
 
-        // Smart Visualization: Hide "Ingredient -> Chef" connections to reduce clutter
-        // Only show them if:
-        // 1. The connection itself is selected
-        // 2. The source (Ingredient) is selected or hovered
-        // 3. The target (Chef) is selected or hovered
-        const isIngredientToChef = fromBlock.type === 'ingredients' && toBlock.type === 'chef';
-        
-        if (isIngredientToChef) {
-          const isSelected = selectedConnectionId === conn.id;
-          
-          // Check if source/target are active (selected or hovered)
-          // We check both the effective block ID (which might be a group) and the original connection ID
-          // This ensures that hovering a "Context Tag" (which sets hoveredId to the original ingredient ID)
-          // still triggers the line visibility even if the ingredient is inside a collapsed group.
-          const isFromActive = 
-            selectedBlockIds.includes(fromBlock.id) || 
-            hoveredBlockId === fromBlock.id || 
-            hoveredBlockId === conn.fromId ||
-            selectedBlockIds.includes(conn.fromId);
+        // Determine bundle properties
+        let isBundleActive = false;
+        let isBundleContext = true;
+        let isBundleSelected = false;
+        let isBundleHighlighted = false;
 
-          const isToActive = 
-            selectedBlockIds.includes(toBlock.id) || 
-            hoveredBlockId === toBlock.id || 
-            hoveredBlockId === conn.toId ||
-            selectedBlockIds.includes(conn.toId);
-          
-          if (!isSelected && !isFromActive && !isToActive) {
-            return null;
-          }
-        }
+        groupConns.forEach(conn => {
+            const connFrom = getEffectiveBlock(conn.fromId)!;
+            const connTo = getEffectiveBlock(conn.toId)!;
 
-        const isDimmed = highlightedConnectionIds.length > 0 && !highlightedConnectionIds.includes(conn.id);
-        const isHighlighted = highlightedConnectionIds.includes(conn.id);
+            // Check original types for context logic
+            const isContext = (connFrom.type === 'ingredients' || connFrom.type === 'context_file' || connFrom.type === 'input_file') && 
+                              (connTo.type === 'chef' || connTo.type === 'input_file');
+            
+            if (!isContext) {
+                isBundleContext = false;
+            }
+
+            const isSelected = selectedConnectionId === conn.id;
+            // Check if source/target are active (selected or hovered)
+            const isFromActive = 
+                selectedBlockIds.includes(connFrom.id) || 
+                hoveredBlockId === connFrom.id || 
+                hoveredBlockId === conn.fromId ||
+                selectedBlockIds.includes(conn.fromId);
+
+            const isToActive = 
+                selectedBlockIds.includes(connTo.id) || 
+                hoveredBlockId === connTo.id || 
+                hoveredBlockId === conn.toId ||
+                selectedBlockIds.includes(conn.toId);
+
+            if (isSelected || isFromActive || isToActive) {
+                isBundleActive = true;
+            }
+            
+            if (isSelected) isBundleSelected = true;
+            if (highlightedConnectionIds.includes(conn.id)) isBundleHighlighted = true;
+        });
+
+        const isGhost = isBundleContext && !isBundleActive;
+        const isDimmed = highlightedConnectionIds.length > 0 && !isBundleHighlighted;
 
         return (
           <ConnectionLine 
-            key={conn.id} 
-            conn={conn} 
+            key={key} 
+            conn={representativeConn} 
             fromBlock={fromBlock} 
             toBlock={toBlock} 
-            isSelected={selectedConnectionId === conn.id}
-            isDimmed={isDimmed}
-            isHighlighted={isHighlighted}
+            isSelected={isBundleSelected}
+            isDimmed={isDimmed || isGhost} 
+            isHighlighted={isBundleHighlighted}
             draggingBlockId={draggingBlockId}
             draggingPos={draggingPos}
             scale={scale}
+            ghostOpacity={isGhost ? 0.05 : undefined} 
           />
         );
       })}

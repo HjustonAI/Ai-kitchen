@@ -1,5 +1,21 @@
 export type BlockType = 'chef' | 'ingredients' | 'dish' | 'note' | 'context_file' | 'input_file';
 
+export interface BlockData {
+  // Chef properties
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  
+  // File/Context properties
+  filePath?: string;
+  isExternal?: boolean;
+  content?: string;
+
+  // Dish properties
+  outputFormat?: 'markdown' | 'json' | 'text' | 'file';
+  savePath?: string;
+}
+
 export type Block = {
   id: string;
   type: BlockType;
@@ -9,6 +25,7 @@ export type Block = {
   y: number;
   width?: number;
   height?: number;
+  data?: BlockData;
 };
 
 export type Group = {

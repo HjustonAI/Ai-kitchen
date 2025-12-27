@@ -1,0 +1,591 @@
+{
+  "blocks": [
+    {
+      "id": "sys_header",
+      "type": "note",
+      "title": "SYSTEM OVERVIEW",
+      "description": "Ogólny schemat architektury Zaspani",
+      "x": -326.9387783736099,
+      "y": -153.87755149228033,
+      "width": 256,
+      "height": 160
+    },
+    {
+      "id": "sys_user",
+      "type": "input_file",
+      "title": "User Intent",
+      "description": "Polecenie startowe",
+      "x": -8.571428646499141,
+      "y": 25.30612179479319,
+      "width": 256,
+      "height": 140
+    },
+    {
+      "id": "ctx_branding",
+      "type": "context_file",
+      "title": "zaspani_branding.md",
+      "description": "Brand Voice & Identity",
+      "x": -854.1818225059817,
+      "y": 475.63636500681696,
+      "width": 256,
+      "height": 140,
+      "data": {
+        "isExternal": false
+      }
+    },
+    {
+      "id": "ctx_personas",
+      "type": "context_file",
+      "title": "zaspani_personas.md",
+      "description": "Audience Profiles",
+      "x": -856.3636407048244,
+      "y": 629.0909108784567,
+      "width": 256,
+      "height": 140
+    },
+    {
+      "id": "ctx_strategy",
+      "type": "context_file",
+      "title": "zaspani_core_strategy.md",
+      "description": "Core Strategy",
+      "x": -853.09091340656,
+      "y": 782.5454567500972,
+      "width": 256,
+      "height": 140
+    },
+    {
+      "id": "ctx_copy",
+      "type": "context_file",
+      "title": "zaspani_copy_notes.md",
+      "description": "Copywriting Patterns",
+      "x": -855.2727316054024,
+      "y": 934.9090935223163,
+      "width": 256,
+      "height": 140
+    },
+    {
+      "id": "ctx_graphics",
+      "type": "context_file",
+      "title": "zaspani_graphics.md",
+      "description": "Visual Guidelines",
+      "x": -854.181822505981,
+      "y": 1245.4545497106124,
+      "width": 256,
+      "height": 140
+    },
+    {
+      "id": "ctx_formats",
+      "type": "context_file",
+      "title": "zaspani_always_on_formats.md",
+      "description": "Format Library",
+      "x": -851.1627961984509,
+      "y": 1405.581401392729,
+      "width": 256,
+      "height": 140
+    },
+    {
+      "id": "ctx_checklists",
+      "type": "context_file",
+      "title": "event_checklists.md",
+      "description": "Ops Checklists",
+      "x": -856.5606123628795,
+      "y": 1091.4545478132347,
+      "width": 256,
+      "height": 140
+    },
+    {
+      "id": "sys_runner",
+      "type": "chef",
+      "title": "00_Scenario_Runner",
+      "description": "Orkiestrator procesu",
+      "x": 284.16666528582573,
+      "y": -70.00000321865078,
+      "width": 320,
+      "height": 324
+    },
+    {
+      "id": "sys_agents",
+      "type": "chef",
+      "title": "Specialist Agents",
+      "description": "Strategist, Copywriter, Event Designer",
+      "x": 658.3333316445351,
+      "y": 0.8333309590817449,
+      "width": 320,
+      "height": 182
+    },
+    {
+      "id": "sys_prod",
+      "type": "dish",
+      "title": "04_Production",
+      "description": "Folders: campaigns/[DATE]_[NAME]/, always_on/zaspani/[YYYY-MM]/, foundation/",
+      "x": 1042.2870810581196,
+      "y": -8.28116418717921,
+      "width": 288,
+      "height": 199
+    },
+    {
+      "id": "cm_header",
+      "type": "note",
+      "title": "CHATMODES",
+      "description": "Dostępne tryby pracy w Copilot",
+      "x": -335.4954992880169,
+      "y": 646.8243236052589,
+      "width": 256,
+      "height": 160
+    },
+    {
+      "id": "cm_runner",
+      "type": "chef",
+      "title": "00_Scenario_Runner",
+      "description": "Wykonywanie scenariuszy krok po kroku. (Strict)",
+      "x": -6.666666746139525,
+      "y": 709.9999989271164,
+      "width": 320,
+      "height": 182
+    },
+    {
+      "id": "cm_campaign",
+      "type": "chef",
+      "title": "01_Zaspani_Campaign",
+      "description": "Praca kreatywna ad-hoc, pisanie postów, burze mózgów.",
+      "x": 406.6666667461395,
+      "y": 707.4999988973141,
+      "width": 320,
+      "height": 182
+    },
+    {
+      "id": "cm_architect",
+      "type": "chef",
+      "title": "90_System_Architect",
+      "description": "Zarządzanie systemem, edycja agentów i scenariuszy.",
+      "x": 814.1666668355465,
+      "y": 703.3333321809769,
+      "width": 320,
+      "height": 182
+    },
+    {
+      "id": "sc1_header",
+      "type": "note",
+      "title": "SCENARIO: Nowa Kampania",
+      "description": "nowa_kampania_zaspani.md",
+      "x": -322.2297330072655,
+      "y": 1273.0180198642515,
+      "width": 256,
+      "height": 160
+    },
+    {
+      "id": "sc1_start",
+      "type": "input_file",
+      "title": "Start Inputs",
+      "description": "Name, Date, Venue, Price, Format, Audience, Ideas, Constraints",
+      "x": 0.5972156928791805,
+      "y": 1400.860624826346,
+      "width": 256,
+      "height": 160
+    },
+    {
+      "id": "sc1_step1",
+      "type": "chef",
+      "title": "1. Strategia & Brief",
+      "description": "Output: Summary, Goals, Risks.",
+      "x": 300.9452573837114,
+      "y": 1304.186442391321,
+      "width": 320,
+      "height": 354
+    },
+    {
+      "id": "sc1_step2",
+      "type": "chef",
+      "title": "2. Brief Kampanii",
+      "description": "Output: 01_brief_kampanii.md",
+      "x": 666.9897966394942,
+      "y": 1388.0612258680494,
+      "width": 320,
+      "height": 182
+    },
+    {
+      "id": "sc1_step3",
+      "type": "chef",
+      "title": "3. Big Idea & Copy",
+      "description": "Output: 02_big_idea_i_copy.md (Slogan, Formats, Event Desc)",
+      "x": 1019.0646272542103,
+      "y": 1360.1190486603302,
+      "width": 320,
+      "height": 238
+    },
+    {
+      "id": "sc1_step4",
+      "type": "chef",
+      "title": "4. Ops Checklist",
+      "description": "Output: 03_checklista_ops.md",
+      "x": 1383.1972811380474,
+      "y": 1359.3367357335812,
+      "width": 320,
+      "height": 238
+    },
+    {
+      "id": "sc1_out",
+      "type": "dish",
+      "title": "Folder Kampanii",
+      "description": "Files in 04_Production/campaigns/[DATE]_[NAME]/",
+      "x": 1745.5782343710748,
+      "y": 1386.4455795980314,
+      "width": 288,
+      "height": 183
+    },
+    {
+      "id": "sc2_header",
+      "type": "note",
+      "title": "SCENARIO: Kontent Kampanii",
+      "description": "kontent_kampanii_zaspani.md",
+      "x": -318.3673497271109,
+      "y": 1826.9387783736101,
+      "width": 256,
+      "height": 160
+    },
+    {
+      "id": "sc2_start",
+      "type": "input_file",
+      "title": "Inputs & Contexts",
+      "description": "Inputs: Name, Date, Folder Path. + Campaign Files (Brief, Big Idea)",
+      "x": -8.571428646499141,
+      "y": 1893.8775535942557,
+      "width": 256,
+      "height": 160
+    },
+    {
+      "id": "sc2_step1",
+      "type": "chef",
+      "title": "1. Generowanie Pomysłów",
+      "description": "Social Desc, Reels (10), Stories Backgrounds (10), Contests (5), Stories Formats (10)",
+      "x": 294.69387662872487,
+      "y": 1852.2449001684022,
+      "width": 320,
+      "height": 238
+    },
+    {
+      "id": "sc2_step2",
+      "type": "chef",
+      "title": "2. Brand Guardian Review",
+      "description": "Check for 'on brand' vs 'cringe'.",
+      "x": 667.7551008825844,
+      "y": 1877.9591861078975,
+      "width": 320,
+      "height": 182
+    },
+    {
+      "id": "sc2_out",
+      "type": "dish",
+      "title": "Assets File",
+      "description": "Output: [CAMPAIGN]/05_assets_i_wymagania.md",
+      "x": 1033.4693862965912,
+      "y": 1874.2857166879712,
+      "width": 288,
+      "height": 183
+    },
+    {
+      "id": "sc3_header",
+      "type": "note",
+      "title": "SCENARIO: Always On Formats",
+      "description": "zaspani_formaty_always_on.md",
+      "x": -325.7142885669671,
+      "y": 2220.816329340396,
+      "width": 256,
+      "height": 160
+    },
+    {
+      "id": "sc3_start",
+      "type": "input_file",
+      "title": "Inputs & Contexts",
+      "description": "Inputs: Goal, Channels, Mix, Frequency.",
+      "x": -8.571428646499136,
+      "y": 2311.0204108872526,
+      "width": 256,
+      "height": 140
+    },
+    {
+      "id": "sc3_step1",
+      "type": "chef",
+      "title": "1. Format Design",
+      "description": "Longlist -> Shortlist -> Full Cards (Template)",
+      "x": 283.67346836894,
+      "y": 2260.8163288149017,
+      "width": 320,
+      "height": 238
+    },
+    {
+      "id": "sc3_out",
+      "type": "dish",
+      "title": "Formats Library",
+      "description": "Output: Updated always_on_formats.md OR foundation/zaspani_always_on_formats_vX.X.md",
+      "x": 634.6938761032305,
+      "y": 2280.4081657211855,
+      "width": 288,
+      "height": 199
+    },
+    {
+      "id": "sc4_header",
+      "type": "note",
+      "title": "SCENARIO: Kalendarz Miesięczny",
+      "description": "zaspani_kalendarz_miesieczny.md",
+      "x": -319.5918395337536,
+      "y": 2596.326533207541,
+      "width": 256,
+      "height": 160
+    },
+    {
+      "id": "sc4_start",
+      "type": "input_file",
+      "title": "Inputs & Contexts",
+      "description": "Inputs: Month/Year, Frequency, Channels, Formats, Events.",
+      "x": -15.918367486355548,
+      "y": 2668.1632676547565,
+      "width": 256,
+      "height": 160
+    },
+    {
+      "id": "sc4_step1",
+      "type": "chef",
+      "title": "1. Planning",
+      "description": "Date Map -> Slot Assignment -> Micro-briefs -> QA",
+      "x": 292.24489701543916,
+      "y": 2628.979593842189,
+      "width": 320,
+      "height": 238
+    },
+    {
+      "id": "sc4_out",
+      "type": "dish",
+      "title": "Calendar File",
+      "description": "Output: 04_Production/always_on/zaspani/[YYYY-MM]/01_kalendarz_kontentu.md",
+      "x": 644.4897945563724,
+      "y": 2651.020410361758,
+      "width": 288,
+      "height": 199
+    }
+  ],
+  "connections": [
+    {
+      "id": "c_sys_1",
+      "fromId": "sys_user",
+      "toId": "sys_runner",
+      "type": "default"
+    },
+    {
+      "id": "c_sys_2_brand",
+      "fromId": "ctx_branding",
+      "toId": "sys_runner",
+      "type": "default"
+    },
+    {
+      "id": "c_sys_2_strat",
+      "fromId": "ctx_strategy",
+      "toId": "sys_runner",
+      "type": "default"
+    },
+    {
+      "id": "c_sys_3",
+      "fromId": "sys_runner",
+      "toId": "sys_agents",
+      "type": "flow"
+    },
+    {
+      "id": "c_sys_4",
+      "fromId": "sys_agents",
+      "toId": "sys_prod",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc1_ctx1",
+      "fromId": "ctx_branding",
+      "toId": "sc1_step1",
+      "type": "default"
+    },
+    {
+      "id": "c_sc1_ctx2",
+      "fromId": "ctx_personas",
+      "toId": "sc1_step1",
+      "type": "default"
+    },
+    {
+      "id": "c_sc1_ctx3",
+      "fromId": "ctx_strategy",
+      "toId": "sc1_step1",
+      "type": "default"
+    },
+    {
+      "id": "c_sc1_ctx4",
+      "fromId": "ctx_copy",
+      "toId": "sc1_step3",
+      "type": "default"
+    },
+    {
+      "id": "c_sc1_ctx5",
+      "fromId": "ctx_checklists",
+      "toId": "sc1_step4",
+      "type": "default"
+    },
+    {
+      "id": "c_sc1_1",
+      "fromId": "sc1_start",
+      "toId": "sc1_step1",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc1_2",
+      "fromId": "sc1_step1",
+      "toId": "sc1_step2",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc1_3",
+      "fromId": "sc1_step2",
+      "toId": "sc1_step3",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc1_4",
+      "fromId": "sc1_step3",
+      "toId": "sc1_step4",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc1_5",
+      "fromId": "sc1_step4",
+      "toId": "sc1_out",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc2_ctx1",
+      "fromId": "ctx_branding",
+      "toId": "sc2_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc2_ctx2",
+      "fromId": "ctx_graphics",
+      "toId": "sc2_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc2_ctx3",
+      "fromId": "ctx_personas",
+      "toId": "sc2_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc2_ctx4",
+      "fromId": "ctx_strategy",
+      "toId": "sc2_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc2_ctx5",
+      "fromId": "ctx_copy",
+      "toId": "sc2_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc2_1",
+      "fromId": "sc2_start",
+      "toId": "sc2_step1",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc2_2",
+      "fromId": "sc2_step1",
+      "toId": "sc2_step2",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc2_3",
+      "fromId": "sc2_step2",
+      "toId": "sc2_out",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc3_ctx1",
+      "fromId": "ctx_branding",
+      "toId": "sc3_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc3_ctx2",
+      "fromId": "ctx_copy",
+      "toId": "sc3_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc3_ctx3",
+      "fromId": "ctx_personas",
+      "toId": "sc3_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc3_ctx4",
+      "fromId": "ctx_strategy",
+      "toId": "sc3_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc3_ctx5",
+      "fromId": "ctx_formats",
+      "toId": "sc3_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc3_1",
+      "fromId": "sc3_start",
+      "toId": "sc3_step1",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc3_2",
+      "fromId": "sc3_step1",
+      "toId": "sc3_out",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc4_ctx1",
+      "fromId": "ctx_branding",
+      "toId": "sc4_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc4_ctx2",
+      "fromId": "ctx_copy",
+      "toId": "sc4_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc4_ctx3",
+      "fromId": "ctx_personas",
+      "toId": "sc4_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc4_ctx4",
+      "fromId": "ctx_strategy",
+      "toId": "sc4_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc4_ctx5",
+      "fromId": "ctx_formats",
+      "toId": "sc4_start",
+      "type": "default"
+    },
+    {
+      "id": "c_sc4_1",
+      "fromId": "sc4_start",
+      "toId": "sc4_step1",
+      "type": "flow"
+    },
+    {
+      "id": "c_sc4_2",
+      "fromId": "sc4_step1",
+      "toId": "sc4_out",
+      "type": "flow"
+    }
+  ]
+}

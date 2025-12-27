@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { BlockType } from './types';
+import type { Block, BlockType } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Board } from './components/Board';
 import { BottomBar } from './components/BottomBar';
-import { Block } from './components/Block';
+import { Block as BlockComponent } from './components/Block';
 import { Group } from './components/Group';
 import { ConnectionsLayer } from './components/ConnectionsLayer';
 import ExecutionLayer from './components/ExecutionLayer';
-import { PropertiesPanel } from './components/PropertiesPanel';
 import { ContextPanel } from './components/ContextPanel';
 import { useStore } from './store/useStore';
 import { getBlockDimensions } from './lib/utils';
@@ -38,7 +37,6 @@ function App() {
   const addConnection = useStore((state) => state.addConnection);
 
   // Local Interaction State
-  const [prompt, setPrompt] = useState('');
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
   const [isSpacePressed, setIsSpacePressed] = useState(false);
@@ -88,22 +86,26 @@ function App() {
     const boardRect = currentTarget.getBoundingClientRect();
 
     rAF.current = requestAnimationFrame(() => {
-      if (ctrlKey || metaKey) {
+      // Default behavior: Zoom on scroll (unless Ctrl is pressed, then Pan - swapping standard behavior as requested)
+      // Actually, standard for "Zoom with scroll" usually means just Scroll = Zoom.
+      // Let's make Scroll = Zoom, and Ctrl+Scroll = Pan (or just Pan with drag).
+
+      if (!ctrlKey && !metaKey) {
         const zoomSensitivity = 0.001;
         const delta = -deltaY * zoomSensitivity;
         const newScale = Math.min(Math.max(0.1, view.scale + delta), 5);
-        
+
         // Zoom towards mouse pointer
         const mouseX = clientX - boardRect.left;
         const mouseY = clientY - boardRect.top;
-        
+
         const scaleRatio = newScale / view.scale;
         const newX = mouseX - (mouseX - view.x) * scaleRatio;
         const newY = mouseY - (mouseY - view.y) * scaleRatio;
 
         updateView({ x: newX, y: newY, scale: newScale });
       } else {
-        // Pan with scroll wheel
+        // Pan with scroll wheel if Ctrl is held (optional, or just disable pan on scroll)
         updateView({
           x: view.x - deltaX,
           y: view.y - deltaY
@@ -119,9 +121,9 @@ function App() {
     // 2. Space + Left Click
     // 3. Left Click on the background (not on a block)
     const isBackground = e.target === e.currentTarget;
-    
+
     if (
-      e.button === 1 || 
+      e.button === 1 ||
       (e.button === 0 && isSpacePressed) ||
       (e.button === 0 && isBackground)
     ) {
@@ -153,7 +155,7 @@ function App() {
         // Transform screen coordinates to canvas coordinates
         const rawX = clientX - boardRect.left;
         const rawY = clientY - boardRect.top;
-        
+
         setTempConnectionPos({
           x: (rawX - view.x) / view.scale,
           y: (rawY - view.y) / view.scale
@@ -173,11 +175,11 @@ function App() {
       // If we are hovering over a block, try to connect
       if (hoveredBlockId && hoveredBlockId !== connectingSourceId) {
         const exists = connections.some(
-            c => (c.fromId === connectingSourceId && c.toId === hoveredBlockId) ||
-                 (c.fromId === hoveredBlockId && c.toId === connectingSourceId)
+          c => (c.fromId === connectingSourceId && c.toId === hoveredBlockId) ||
+            (c.fromId === hoveredBlockId && c.toId === connectingSourceId)
         );
         if (!exists) {
-            addConnection(connectingSourceId, hoveredBlockId);
+          addConnection(connectingSourceId, hoveredBlockId);
         }
       }
       setConnectingSourceId(null);
@@ -280,7 +282,7 @@ function App() {
         if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
           return;
         }
-        
+
         if (selectedId) {
           deleteBlock(selectedId);
         } else if (selectedGroupId) {
@@ -295,17 +297,36 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedId, selectedGroupId, selectedConnectionId, deleteBlock, deleteGroup, deleteConnection]);
 
+  // Helper to check if a block is inside a collapsed group
+  const isBlockHidden = (block: Block) => {
+    const dims = getBlockDimensions(block.type, 1);
+    const width = block.width || dims.width;
+    const height = block.height || dims.height;
+    const bCenterX = block.x + width / 2;
+    const bCenterY = block.y + height / 2;
+
+    return groups.some(g => {
+      if (!g.collapsed) return false;
+      return (
+        bCenterX >= g.x &&
+        bCenterX <= g.x + g.width &&
+        bCenterY >= g.y &&
+        bCenterY <= g.y + g.height
+      );
+    });
+  };
+
   return (
     <div className="flex h-screen w-screen bg-kitchen-bg text-white overflow-hidden font-sans selection:bg-kitchen-accent/30">
       <Sidebar />
-      
-      <div 
+
+      <div
         className="flex-1 flex flex-col h-full relative"
         onMouseMove={handleMouseMove}
         onMouseUp={handleBoardMouseUp}
         onMouseDown={handleMouseDown}
       >
-        <Board 
+        <Board
           onClick={handleBoardClick}
           view={view}
           onMouseDown={handleMouseDown}
@@ -322,17 +343,16 @@ function App() {
           ))}
           <ConnectionsLayer />
           <ExecutionLayer />
-          {blocks.map(block => (
-            <Block
+          {blocks.filter(block => !isBlockHidden(block)).map(block => (
+            <BlockComponent
               key={block.id}
               block={block}
               scale={view.scale}
             />
           ))}
         </Board>
-        
-        <BottomBar prompt={prompt} setPrompt={setPrompt} />
-        <PropertiesPanel />
+
+        <BottomBar />
         <ContextPanel />
       </div>
     </div>

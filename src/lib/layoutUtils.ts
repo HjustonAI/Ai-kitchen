@@ -61,7 +61,11 @@ export const getLayoutedElements = (
 
   // Add blocks to graph
   blocks.forEach((block) => {
-    dagreGraph.setNode(block.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+    const dims = getBlockDimensions(block.type);
+    const width = block.width || dims.width;
+    const height = block.height || dims.height;
+
+    dagreGraph.setNode(block.id, { width, height });
     
     const groupId = blockGroupMap.get(block.id);
     if (groupId) {
@@ -77,13 +81,16 @@ export const getLayoutedElements = (
 
   const layoutedBlocks = blocks.map((block) => {
     const nodeWithPosition = dagreGraph.node(block.id);
+    const dims = getBlockDimensions(block.type);
+    const width = block.width || dims.width;
+    const height = block.height || dims.height;
     
     // We are shifting the dagre node position (anchor=center center) to the top left
     // so it matches the React Flow / absolute positioning coordinate system
     return {
       ...block,
-      x: nodeWithPosition.x - NODE_WIDTH / 2,
-      y: nodeWithPosition.y - NODE_HEIGHT / 2,
+      x: nodeWithPosition.x - width / 2,
+      y: nodeWithPosition.y - height / 2,
     };
   });
 

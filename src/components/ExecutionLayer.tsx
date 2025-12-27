@@ -36,7 +36,7 @@ export const ExecutionLayer: React.FC = () => {
 
   const isRunning = useExecutionStore((s) => s.isRunning);
   const dataPackets = useExecutionStore((s) => s.dataPackets);
-  const removePacket = useExecutionStore((s) => s.removePacket);
+  const onPacketArrived = useExecutionStore((s) => s.onPacketArrived);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const progressMap = useRef<Map<string, number>>(new Map());
@@ -120,7 +120,7 @@ export const ExecutionLayer: React.FC = () => {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
       // Update and Draw
-      const packetsToRemove: string[] = [];
+      const packetsToProcess: string[] = [];
 
       progressMap.current.forEach((progress, id) => {
         // Update progress if running
@@ -132,7 +132,7 @@ export const ExecutionLayer: React.FC = () => {
         }
 
         if (nextProgress >= 1) {
-          packetsToRemove.push(id);
+          packetsToProcess.push(id);
         }
       });
 
@@ -173,9 +173,11 @@ export const ExecutionLayer: React.FC = () => {
         ctx.fill();
       });
 
-      // Remove finished packets
-      if (packetsToRemove.length > 0) {
-        packetsToRemove.forEach(id => removePacket(id));
+      // Process finished packets
+      if (packetsToProcess.length > 0) {
+        // We need to pass the current connections to the store action
+        // Since we are in a closure, we use the `connections` from the hook scope
+        packetsToProcess.forEach(id => onPacketArrived(id, connections));
       }
 
       rafRef.current = requestAnimationFrame(render);
@@ -187,7 +189,7 @@ export const ExecutionLayer: React.FC = () => {
       rafRef.current = null;
       lastRef.current = null;
     };
-  }, [blocks, connections, groups, view, isRunning, dataPackets, removePacket]);
+  }, [blocks, connections, groups, view, isRunning, dataPackets, onPacketArrived]);
 
   return (
     <canvas 

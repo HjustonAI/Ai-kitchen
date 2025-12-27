@@ -17,9 +17,38 @@ export const Group: React.FC<GroupProps> = ({ group, scale }) => {
   const selectGroup = useStore((state) => state.selectGroup);
   const toggleGroupCollapse = useStore((state) => state.toggleGroupCollapse);
   const isSelected = useStore((state) => state.selectedGroupId === group.id);
+  const draggingBlockId = useStore((state) => state.draggingBlockId);
+  const draggingPos = useStore((state) => state.draggingPos);
   
   const [isDragging, setIsDragging] = useState(false);
+  const [title, setTitle] = useState(group.title);
   const isCollapsed = group.collapsed;
+
+  // Check if a block is being dragged over this group
+  const isDragOver = React.useMemo(() => {
+    if (!draggingBlockId || !draggingPos) return false;
+    
+    // Simple point-in-rect check for the mouse/drag position
+    // Ideally we check the block bounds, but cursor position is a good enough proxy for "dropping into"
+    const x = draggingPos.x;
+    const y = draggingPos.y;
+    
+    // If collapsed, we only check the header area
+    const width = isCollapsed ? 300 : group.width;
+    const height = isCollapsed ? 60 : group.height;
+    
+    return (
+      x >= group.x && 
+      x <= group.x + width && 
+      y >= group.y && 
+      y <= group.y + height
+    );
+  }, [draggingBlockId, draggingPos, group.x, group.y, group.width, group.height, isCollapsed]);
+
+  // Sync local title with prop if it changes externally (e.g. undo)
+  React.useEffect(() => {
+    setTitle(group.title);
+  }, [group.title]);
 
   return (
     <Rnd
@@ -43,16 +72,16 @@ export const Group: React.FC<GroupProps> = ({ group, scale }) => {
           });
         }
       }}
-      bounds="parent"
       dragHandleClassName="group-drag-handle"
       enableResizing={isSelected && !isCollapsed}
       className={cn(
         "absolute rounded-3xl border-2 transition-all duration-200 group backdrop-blur-[2px]",
         isSelected 
           ? "border-kitchen-neon-cyan/30 bg-kitchen-neon-cyan/5 shadow-[0_0_40px_-10px_rgba(0,243,255,0.15)] z-0" 
-          : "border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04] -z-10",
+          : "border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04] z-0",
         isDragging && "cursor-grabbing",
-        isCollapsed && "bg-kitchen-surface border-kitchen-border z-10"
+        isCollapsed && "bg-kitchen-surface border-kitchen-border z-10",
+        isDragOver && !isCollapsed && "border-kitchen-neon-cyan/50 bg-kitchen-neon-cyan/10 shadow-[inset_0_0_20px_rgba(0,243,255,0.2)]"
       )}
       onClick={() => {
         selectGroup(group.id);
@@ -92,8 +121,13 @@ export const Group: React.FC<GroupProps> = ({ group, scale }) => {
             isCollapsed ? "text-lg text-white" : "text-2xl",
             isSelected ? "text-kitchen-neon-cyan/90 placeholder-kitchen-neon-cyan/50" : "text-white/20 placeholder-white/20 focus:text-white/80"
           )}
-          value={group.title}
-          onChange={(e) => updateGroup(group.id, { title: e.target.value })}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => {
+            if (title !== group.title) {
+              updateGroup(group.id, { title });
+            }
+          }}
           placeholder="GROUP NAME"
           aria-label="Group name"
         />

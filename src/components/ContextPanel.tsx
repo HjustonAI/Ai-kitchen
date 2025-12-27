@@ -1,9 +1,48 @@
-import { useMemo, memo } from 'react';
+import { useMemo, memo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Scroll, ChefHat, ExternalLink, Layers, BoxSelect, Utensils, StickyNote, FileText, Keyboard } from 'lucide-react';
+import { X, Scroll, ChefHat, ExternalLink, Layers, BoxSelect, Utensils, StickyNote, FileText, Keyboard, Settings, Cpu, Thermometer, Hash, Save, Database, ChevronDown, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
-import type { Block } from '../types';
+import type { Block, BlockData } from '../types';
+
+// --- Helper Components ---
+
+const CollapsibleSection = ({ title, count, icon, children, defaultOpen = true }: { title: string, count?: number, icon?: React.ReactNode, children: React.ReactNode, defaultOpen?: boolean }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="space-y-2 pt-4 border-t border-white/10 first:pt-0 first:border-t-0">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between group py-1"
+      >
+        <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider group-hover:text-white/60 transition-colors flex items-center gap-2">
+          {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          {icon}
+          {title}
+        </h3>
+        {count !== undefined && (
+          <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-white/60">
+            {count}
+          </span>
+        )}
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-1 pb-2">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 // --- Content Component (Heavy Logic) ---
 
@@ -17,6 +56,7 @@ const ContextPanelContent = memo(({ mode }: { mode: 'single' | 'multi' | 'group'
   const selectBlock = useStore((state) => state.selectBlock);
   const selectGroup = useStore((state) => state.selectGroup);
   const focusBlock = useStore((state) => state.focusBlock);
+  const updateBlock = useStore((state) => state.updateBlock);
 
   // --- Data Preparation ---
 
@@ -35,6 +75,25 @@ const ContextPanelContent = memo(({ mode }: { mode: 'single' | 'multi' | 'group'
   const singleBlock = mode === 'single' 
     ? blocks.find(b => b.id === selectedBlockIds[0])
     : null;
+
+  // Local state for editing properties (to avoid flooding undo history)
+  const [blockData, setBlockData] = useState<BlockData>({});
+
+  useEffect(() => {
+    if (singleBlock) {
+      setBlockData(singleBlock.data || {});
+    }
+  }, [singleBlock?.id, singleBlock?.data]);
+
+  const handleDataUpdate = (updates: Partial<BlockData>) => {
+    setBlockData(prev => ({ ...prev, ...updates }));
+  };
+
+  const commitDataUpdate = () => {
+    if (singleBlock) {
+      updateBlock(singleBlock.id, { data: blockData });
+    }
+  };
 
   // Combined Contexts (for Group or Multi-Chef selection)
   const combinedContexts = useMemo(() => {
@@ -133,31 +192,158 @@ const ContextPanelContent = memo(({ mode }: { mode: 'single' | 'multi' | 'group'
   const renderContextList = (ingredients: Block[]) => {
     if (ingredients.length === 0) {
       return (
-        <div className="text-sm text-white/20 italic text-center py-8 border border-dashed border-white/10 rounded-lg">
+        <div className="text-sm text-white/20 italic text-center py-4 border border-dashed border-white/10 rounded-lg">
           No context files connected
         </div>
       );
     }
     return (
-      <div className="grid gap-2">
+      <div className="flex flex-wrap gap-2">
         {ingredients.map(ing => (
           <div 
             key={ing.id}
             onClick={() => focusBlock(ing.id)}
-            className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 cursor-pointer transition-all group"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 cursor-pointer transition-all group max-w-full"
+            title={ing.description || ing.title}
           >
-            {ing.type === 'ingredients' ? <Scroll size={16} className="text-orange-400/70" /> : 
-             ing.type === 'context_file' ? <FileText size={16} className="text-blue-400/70" /> :
-             ing.type === 'input_file' ? <Keyboard size={16} className="text-green-400/70" /> :
-             <Scroll size={16} className="text-white/70" />}
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-white/90 truncate">{ing.title}</div>
-              <div className="text-xs text-white/40 truncate">{ing.description ? ing.description.slice(0, 50) + '...' : 'No content'}</div>
-            </div>
-            <ExternalLink size={14} className="text-white/20 group-hover:text-white/60" />
+            {ing.type === 'ingredients' ? <Scroll size={14} className="text-orange-400/70 shrink-0" /> : 
+             ing.type === 'context_file' ? <FileText size={14} className="text-blue-400/70 shrink-0" /> :
+             ing.type === 'input_file' ? <Keyboard size={14} className="text-green-400/70 shrink-0" /> :
+             <Scroll size={14} className="text-white/70 shrink-0" />}
+            <span className="text-xs font-medium text-white/80 truncate max-w-[180px]">{ing.title}</span>
+            <ExternalLink size={10} className="text-white/0 group-hover:text-white/40 transition-colors shrink-0" />
           </div>
         ))}
       </div>
+    );
+  };
+
+  const renderProperties = () => {
+    if (!singleBlock) return null;
+
+    return (
+      <CollapsibleSection title="Properties" icon={<Settings size={12} />} defaultOpen={true}>
+        {singleBlock.type === 'chef' && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
+                <Cpu size={12} /> Model
+              </label>
+              <select
+                value={blockData.model || 'gpt-4-turbo'}
+                onChange={(e) => {
+                  handleDataUpdate({ model: e.target.value });
+                  updateBlock(singleBlock.id, { data: { ...blockData, model: e.target.value } });
+                }}
+                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-kitchen-accent/50 transition-colors appearance-none"
+              >
+                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                <option value="claude-3-opus">Claude 3 Opus</option>
+                <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
+                <Thermometer size={12} /> Temperature: {blockData.temperature ?? 0.7}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={blockData.temperature ?? 0.7}
+                onChange={(e) => handleDataUpdate({ temperature: parseFloat(e.target.value) })}
+                onMouseUp={commitDataUpdate}
+                className="w-full accent-kitchen-accent"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
+                <Hash size={12} /> Max Tokens
+              </label>
+              <input
+                type="number"
+                value={blockData.maxTokens ?? 4096}
+                onChange={(e) => handleDataUpdate({ maxTokens: parseInt(e.target.value) })}
+                onBlur={commitDataUpdate}
+                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-kitchen-accent/50 transition-colors"
+              />
+            </div>
+          </div>
+        )}
+
+        {(singleBlock.type === 'context_file' || singleBlock.type === 'input_file' || singleBlock.type === 'ingredients') && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
+                <FileText size={12} /> File Path
+              </label>
+              <input
+                type="text"
+                value={blockData.filePath || ''}
+                onChange={(e) => handleDataUpdate({ filePath: e.target.value })}
+                onBlur={commitDataUpdate}
+                placeholder="/path/to/file.txt"
+                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-kitchen-accent/50 transition-colors"
+              />
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isExternal"
+                checked={blockData.isExternal || false}
+                onChange={(e) => {
+                  handleDataUpdate({ isExternal: e.target.checked });
+                  updateBlock(singleBlock.id, { data: { ...blockData, isExternal: e.target.checked } });
+                }}
+                className="rounded border-white/10 bg-black/20 text-kitchen-accent focus:ring-kitchen-accent/50"
+              />
+              <label htmlFor="isExternal" className="text-sm text-white/80">External Reference</label>
+            </div>
+          </div>
+        )}
+
+        {singleBlock.type === 'dish' && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
+                <Database size={12} /> Output Format
+              </label>
+              <select
+                value={blockData.outputFormat || 'markdown'}
+                onChange={(e) => {
+                  handleDataUpdate({ outputFormat: e.target.value as any });
+                  updateBlock(singleBlock.id, { data: { ...blockData, outputFormat: e.target.value as any } });
+                }}
+                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-kitchen-accent/50 transition-colors appearance-none"
+              >
+                <option value="markdown">Markdown (.md)</option>
+                <option value="json">JSON (.json)</option>
+                <option value="text">Plain Text (.txt)</option>
+                <option value="file">Binary File</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-white/60 font-medium">
+                <Save size={12} /> Save Path
+              </label>
+              <input
+                type="text"
+                value={blockData.savePath || ''}
+                onChange={(e) => handleDataUpdate({ savePath: e.target.value })}
+                onBlur={commitDataUpdate}
+                placeholder="./output/result.md"
+                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-kitchen-accent/50 transition-colors"
+              />
+            </div>
+          </div>
+        )}
+      </CollapsibleSection>
     );
   };
 
@@ -171,18 +357,12 @@ const ContextPanelContent = memo(({ mode }: { mode: 'single' | 'multi' | 'group'
     >
       {renderHeader()}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
         
         {/* Group / Multi View */}
         {(mode === 'group' || mode === 'multi') && (
           <>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider">Selected Items</h3>
-                <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-white/60">
-                  {mode === 'group' ? groupBlocks.length : multiSelectedBlocks.length}
-                </span>
-              </div>
+            <CollapsibleSection title="Selected Items" count={mode === 'group' ? groupBlocks.length : multiSelectedBlocks.length}>
               <div className="flex flex-wrap gap-2">
                 {(mode === 'group' ? groupBlocks : multiSelectedBlocks).map(b => (
                   <div key={b.id} className="px-2 py-1 rounded bg-white/5 border border-white/5 text-xs text-white/70 flex items-center gap-1">
@@ -196,57 +376,51 @@ const ContextPanelContent = memo(({ mode }: { mode: 'single' | 'multi' | 'group'
                   </div>
                 ))}
               </div>
-            </div>
+            </CollapsibleSection>
 
             {combinedContexts.length > 0 && (
-              <div className="space-y-3 pt-4 border-t border-white/10">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider">Combined Contexts</h3>
-                  <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-white/60">{combinedContexts.length}</span>
-                </div>
+              <CollapsibleSection title="Combined Contexts" count={combinedContexts.length}>
                 {renderContextList(combinedContexts)}
-              </div>
+              </CollapsibleSection>
             )}
           </>
         )}
 
         {/* Single View - Chef */}
         {mode === 'single' && singleBlock?.type === 'chef' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider">Connected Contexts</h3>
-              <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-white/60">{combinedContexts.length}</span>
-            </div>
-            {renderContextList(combinedContexts)}
+          <>
+            <CollapsibleSection title="Connected Contexts" count={combinedContexts.length}>
+              {renderContextList(combinedContexts)}
+            </CollapsibleSection>
             
-            <div className="space-y-2 pt-4 border-t border-white/10">
-             <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider">System Prompt</h3>
+            <CollapsibleSection title="System Prompt">
              <div className="bg-slate-900/50 rounded-lg p-4 font-mono text-sm text-kitchen-neon-cyan/80 whitespace-pre-wrap border border-kitchen-neon-cyan/10 shadow-inner">
                {singleBlock.description || <span className="text-white/20 italic">No system prompt...</span>}
              </div>
-           </div>
-          </div>
+           </CollapsibleSection>
+          </>
         )}
 
         {/* Single View - Ingredient / Context / Input */}
         {mode === 'single' && (singleBlock?.type === 'ingredients' || singleBlock?.type === 'context_file' || singleBlock?.type === 'input_file') && (
-           <div className="space-y-2 h-full flex flex-col min-h-[200px]">
-             <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider">Content Preview</h3>
-             <div className="flex-1 bg-black/30 rounded-lg p-4 font-mono text-sm text-white/80 whitespace-pre-wrap overflow-y-auto border border-white/5 shadow-inner">
+           <CollapsibleSection title="Content Preview" defaultOpen={true}>
+             <div className="bg-black/30 rounded-lg p-4 font-mono text-sm text-white/80 whitespace-pre-wrap overflow-y-auto border border-white/5 shadow-inner max-h-[400px]">
                {singleBlock.description || <span className="text-white/20 italic">Empty content...</span>}
              </div>
-           </div>
+           </CollapsibleSection>
         )}
 
         {/* Single View - Other */}
         {mode === 'single' && (singleBlock?.type === 'dish' || singleBlock?.type === 'note') && (
-           <div className="space-y-2">
-             <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider">Description</h3>
+           <CollapsibleSection title="Description">
              <div className="bg-white/5 rounded-lg p-4 text-sm text-white/80 whitespace-pre-wrap border border-white/5">
                {singleBlock.description || <span className="text-white/20 italic">No description...</span>}
              </div>
-           </div>
+           </CollapsibleSection>
         )}
+
+        {/* Properties Section (Merged from PropertiesPanel) */}
+        {mode === 'single' && renderProperties()}
 
       </div>
     </motion.div>

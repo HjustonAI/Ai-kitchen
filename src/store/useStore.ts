@@ -21,7 +21,7 @@ interface AppState {
   selectedBlockIds: string[]; // New: Multi-selection support
   selectedGroupId: string | null;
   selectedConnectionId: string | null;
-  
+
   highlightedBlockIds: string[];
   highlightedConnectionIds: string[];
 
@@ -30,7 +30,7 @@ interface AppState {
   tempConnectionPos: { x: number; y: number } | null;
   draggingBlockId: string | null;
   draggingPos: { x: number; y: number } | null;
-  
+
   selectionPriority: 'group' | 'block';
 
   // Actions
@@ -46,7 +46,7 @@ interface AppState {
   deleteGroup: (id: string) => void;
   selectGroup: (id: string | null) => void;
   toggleGroupCollapse: (id: string) => void;
-  
+
   addConnection: (fromId: string, toId: string) => void;
   updateConnection: (id: string, updates: Partial<Connection>) => void;
   deleteConnection: (id: string) => void;
@@ -54,13 +54,22 @@ interface AppState {
   setConnectingSourceId: (id: string | null) => void;
   setHoveredBlockId: (id: string | null) => void;
   setTempConnectionPos: (pos: { x: number; y: number } | null) => void;
-  
+
   updateView: (updates: Partial<ViewState>) => void;
   focusBlock: (id: string) => void;
   clearBoard: () => void;
   layoutBoard: () => void;
   loadState: (data: { blocks: Block[], connections: Connection[], groups?: Group[] }) => void;
 }
+
+// Simple debounce implementation
+const debounce = (func: Function, wait: number) => {
+  let timeout: any;
+  return (...args: any[]) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
 
 // Helper to calculate highlights based on current selection
 const calculateHighlights = (selectedBlockIds: string[], blocks: Block[], connections: Connection[]) => {
@@ -105,10 +114,12 @@ export const useStore = create<AppState>()(
         selectionPriority: 'block',
 
         addBlock: (type) => {
-          const { view } = get();
+          const { view, blocks } = get();
           // Calculate center of current view
           const centerX = (-view.x + window.innerWidth / 2) / view.scale;
           const centerY = (-view.y + window.innerHeight / 2) / view.scale;
+
+          const dims = getBlockDimensions(type, 1);
 
           const newBlock: Block = {
             id: crypto.randomUUID(),
@@ -117,15 +128,18 @@ export const useStore = create<AppState>()(
             description: '',
             x: centerX - 144 + (Math.random() * 50 - 25),
             y: centerY - 100 + (Math.random() * 50 - 25),
+            width: dims.width,
+            height: dims.height,
+            data: {},
           };
 
-          set((state) => ({
-            blocks: [...state.blocks, newBlock],
+          set({
+            blocks: [...blocks, newBlock],
             selectedId: newBlock.id,
             selectedBlockIds: [newBlock.id],
             highlightedBlockIds: [newBlock.id],
             highlightedConnectionIds: [],
-          }));
+          });
         },
 
         updateBlock: (id, updates) => {
@@ -139,8 +153,8 @@ export const useStore = create<AppState>()(
             // If deleting a block that is part of multi-selection, remove it from there too
             // If the main selectedId is deleted, try to pick another one from selectedBlockIds or null
             const newSelectedBlockIds = state.selectedBlockIds.filter(bid => bid !== id);
-            const newSelectedId = state.selectedId === id 
-              ? (newSelectedBlockIds.length > 0 ? newSelectedBlockIds[0] : null) 
+            const newSelectedId = state.selectedId === id
+              ? (newSelectedBlockIds.length > 0 ? newSelectedBlockIds[0] : null)
               : state.selectedId;
 
             const newBlocks = state.blocks.filter((b) => b.id !== id);
@@ -162,10 +176,10 @@ export const useStore = create<AppState>()(
         selectBlock: (id, multi = false) => {
           set((state) => {
             if (id === null) {
-              return { 
-                selectedId: null, 
-                selectedBlockIds: [], 
-                selectedConnectionId: null, 
+              return {
+                selectedId: null,
+                selectedBlockIds: [],
+                selectedConnectionId: null,
                 selectedGroupId: null,
                 highlightedBlockIds: [],
                 highlightedConnectionIds: []
@@ -173,7 +187,7 @@ export const useStore = create<AppState>()(
             }
 
             let newSelectedBlockIds = multi ? [...state.selectedBlockIds] : [id];
-            
+
             if (multi) {
               if (newSelectedBlockIds.includes(id)) {
                 // Toggle off if already selected, unless it's the only one (optional behavior, but standard is toggle)
@@ -188,10 +202,10 @@ export const useStore = create<AppState>()(
 
             const { highlightedBlockIds, highlightedConnectionIds } = calculateHighlights(newSelectedBlockIds, state.blocks, state.connections);
 
-            return { 
-              selectedId: newSelectedId, 
+            return {
+              selectedId: newSelectedId,
               selectedBlockIds: newSelectedBlockIds,
-              selectedConnectionId: null, 
+              selectedConnectionId: null,
               selectedGroupId: null,
               highlightedBlockIds,
               highlightedConnectionIds
@@ -226,6 +240,46 @@ export const useStore = create<AppState>()(
         },
 
         updateGroup: (id, updates) => {
+          const { groups, blocks } = get();
+          const oldGroup = groups.find(g => g.id === id);
+
+          // Check if this is a move operation (not a resize)
+          // Resizing usually includes width/height updates
+          const isResize = updates.width !== undefined || updates.height !== undefined;
+
+          if (oldGroup && !isResize && (updates.x !== undefined || updates.y !== undefined)) {
+            const dx = (updates.x !== undefined ? updates.x : oldGroup.x) - oldGroup.x;
+            const dy = (updates.y !== undefined ? updates.y : oldGroup.y) - oldGroup.y;
+
+            if (dx !== 0 || dy !== 0) {
+              // Find blocks that were inside the OLD group position
+              const blocksToMove = blocks.filter(b => {
+                const dims = getBlockDimensions(b.type, 1);
+                const bCenterX = b.x + dims.width / 2;
+                const bCenterY = b.y + dims.height / 2;
+                return (
+                  bCenterX >= oldGroup.x &&
+                  bCenterX <= oldGroup.x + oldGroup.width &&
+                  bCenterY >= oldGroup.y &&
+                  bCenterY <= oldGroup.y + oldGroup.height
+                );
+              });
+
+              if (blocksToMove.length > 0) {
+                const movedBlockIds = new Set(blocksToMove.map(b => b.id));
+                set(state => ({
+                  groups: state.groups.map(g => g.id === id ? { ...g, ...updates } : g),
+                  blocks: state.blocks.map(b =>
+                    movedBlockIds.has(b.id)
+                      ? { ...b, x: b.x + dx, y: b.y + dy }
+                      : b
+                  )
+                }));
+                return;
+              }
+            }
+          }
+
           set((state) => ({
             groups: state.groups.map((g) => (g.id === id ? { ...g, ...updates } : g)),
           }));
@@ -242,14 +296,15 @@ export const useStore = create<AppState>()(
           const { groups, blocks } = get();
           const group = groups.find(g => g.id === id);
           let highlightedBlockIds: string[] = [];
+          let blocksInGroup: string[] = [];
 
           if (group) {
-            // Find blocks inside the group to highlight them
-            highlightedBlockIds = blocks.filter(b => {
+            // Find blocks inside the group
+            blocksInGroup = blocks.filter(b => {
               const dims = getBlockDimensions(b.type, 1);
               const bCenterX = b.x + dims.width / 2;
               const bCenterY = b.y + dims.height / 2;
-              
+
               return (
                 bCenterX >= group.x &&
                 bCenterX <= group.x + group.width &&
@@ -257,12 +312,14 @@ export const useStore = create<AppState>()(
                 bCenterY <= group.y + group.height
               );
             }).map(b => b.id);
+
+            highlightedBlockIds = blocksInGroup;
           }
 
-          set({ 
-            selectedGroupId: id, 
-            selectedId: null, 
-            selectedBlockIds: [], 
+          set({
+            selectedGroupId: id,
+            selectedId: null,
+            selectedBlockIds: blocksInGroup,
             selectedConnectionId: null,
             highlightedBlockIds,
             highlightedConnectionIds: []
@@ -288,7 +345,7 @@ export const useStore = create<AppState>()(
               toId,
               type: 'default' as const,
             };
-            
+
             const newConnections = [...connections, newConnection];
             const { highlightedBlockIds, highlightedConnectionIds } = calculateHighlights(selectedBlockIds, blocks, newConnections);
 
@@ -321,10 +378,10 @@ export const useStore = create<AppState>()(
         },
 
         selectConnection: (id) => {
-          set({ 
-            selectedConnectionId: id, 
-            selectedId: null, 
-            selectedBlockIds: [], 
+          set({
+            selectedConnectionId: id,
+            selectedId: null,
+            selectedBlockIds: [],
             selectedGroupId: null,
             highlightedBlockIds: [],
             highlightedConnectionIds: []
@@ -348,37 +405,37 @@ export const useStore = create<AppState>()(
             // Center the view on the block
             // view.x + blockCenterX * view.scale = window.innerWidth / 2
             // view.x = window.innerWidth / 2 - blockCenterX * view.scale
-            
+
             const newX = window.innerWidth / 2 - blockCenterX * view.scale;
             const newY = window.innerHeight / 2 - blockCenterY * view.scale;
 
             set({ view: { ...view, x: newX, y: newY } });
-            
+
             // Also select the block
             get().selectBlock(id);
           }
         },
 
-        clearBoard: () => set({ 
-          blocks: [], 
-          groups: [], 
-          connections: [], 
-          selectedId: null, 
-          selectedBlockIds: [], 
-          selectedGroupId: null, 
+        clearBoard: () => set({
+          blocks: [],
+          groups: [],
+          connections: [],
+          selectedId: null,
+          selectedBlockIds: [],
+          selectedGroupId: null,
           selectedConnectionId: null,
           highlightedBlockIds: [],
           highlightedConnectionIds: []
         }),
-        
+
         layoutBoard: () => {
           const { blocks, connections, groups } = get();
           const { layoutedBlocks, layoutedGroups } = getLayoutedElements(blocks, groups, connections, 'LR');
           set({ blocks: layoutedBlocks, groups: layoutedGroups });
         },
 
-        loadState: (data) => set({ 
-          blocks: data.blocks, 
+        loadState: (data) => set({
+          blocks: data.blocks,
           connections: data.connections,
           groups: data.groups || [],
           selectedId: null,
@@ -401,9 +458,17 @@ export const useStore = create<AppState>()(
       }
     ),
     {
+      limit: 50,
       partialize: (state) => {
         const { blocks, groups, connections } = state;
         return { blocks, groups, connections };
+      },
+      equality: (pastState, currentState) => {
+        return JSON.stringify(pastState) === JSON.stringify(currentState);
+      },
+      onSave: (pastState, currentState) => {
+        // Optional debug
+        // console.log('[Zundo] Saved');
       },
     }
   )
