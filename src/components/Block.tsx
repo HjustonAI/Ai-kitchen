@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, memo } from 'react';
+import React, { useRef, useState, useEffect, memo, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Draggable from 'react-draggable';
 import { ChefHat, Scroll, Utensils, StickyNote, X, GripVertical, ExternalLink, FileText, Keyboard, Eye, Loader2, Search, CheckCircle2, Send, Download, FileOutput, FolderOpen } from 'lucide-react';
@@ -6,6 +6,8 @@ import TextareaAutosize from 'react-textarea-autosize';
 import type { Block as BlockType, OutputFile } from '../types';
 import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
+import { useConnectedBlocksOfType } from '../lib/useBlockLookup';
 import { useExecutionStore, type ContextBlockState, type InputBlockState, type DishBlockState } from '../store/useExecutionStore';
 import type { AgentPhase } from '../lib/executionEngineV2';
 
@@ -87,34 +89,21 @@ const BlockControls = ({ handlers, dark = false }: { handlers: BlockHandlers, da
 );
 
 const ChefBlock = ({ block, isSelected, isActive, agentPhase, handlers }: BlockComponentProps) => {
-  const connections = useStore((state) => state.connections);
-  const blocks = useStore((state) => state.blocks);
-  const setHoveredBlockId = useStore((state) => state.setHoveredBlockId);
-  const focusBlock = useStore((state) => state.focusBlock);
+  // Optimized: Get actions directly (they're stable, no subscription needed)
+  const setHoveredBlockId = useCallback((id: string | null) => 
+    useStore.getState().setHoveredBlockId(id), []);
+  const focusBlock = useCallback((id: string) => 
+    useStore.getState().focusBlock(id), []);
   
-  // Get collecting progress for this agent
-  const collectingProgress = useExecutionStore((state) => state.collectingProgress.get(block.id));
+  // Optimized: Only subscribe to THIS agent's progress
+  const collectingProgress = useExecutionStore(
+    useCallback((state) => state.collectingProgress.get(block.id), [block.id])
+  );
 
-  const ingredients = React.useMemo(() => {
-    return connections
-      .filter(c => c.toId === block.id)
-      .map(c => blocks.find(b => b.id === c.fromId))
-      .filter((b): b is BlockType => !!b && b.type === 'ingredients');
-  }, [connections, blocks, block.id]);
-
-  const contexts = React.useMemo(() => {
-    return connections
-      .filter(c => c.toId === block.id)
-      .map(c => blocks.find(b => b.id === c.fromId))
-      .filter((b): b is BlockType => !!b && b.type === 'context_file');
-  }, [connections, blocks, block.id]);
-
-  const inputs = React.useMemo(() => {
-    return connections
-      .filter(c => c.toId === block.id)
-      .map(c => blocks.find(b => b.id === c.fromId))
-      .filter((b): b is BlockType => !!b && b.type === 'input_file');
-  }, [connections, blocks, block.id]);
+  // Optimized: Use dedicated hooks for connected blocks
+  const ingredients = useConnectedBlocksOfType(block.id, 'ingredients');
+  const contexts = useConnectedBlocksOfType(block.id, 'context_file');
+  const inputs = useConnectedBlocksOfType(block.id, 'input_file');
 
   // Agent phase visual config (v2.0 - event-driven)
   // idle = waiting for input trigger
@@ -425,6 +414,16 @@ const ContextFileBlock = ({ block, isSelected, contextState, handlers }: BlockCo
 
 const InputFileBlock = ({ block, isSelected, inputState, handlers }: BlockComponentProps) => {
   const isSending = inputState === 'sending';
+  const simulationState = useExecutionStore((state) => state.simulationState);
+  
+  // Show send button in ready or running state
+  const showSendButton = simulationState === 'ready' || simulationState === 'running';
+  
+  // Use stable callback - get action via getState to avoid subscription
+  const handleSendClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    useExecutionStore.getState().triggerInput(block.id);
+  }, [block.id]);
   
   return (
     <div className={cn(
@@ -432,6 +431,19 @@ const InputFileBlock = ({ block, isSelected, inputState, handlers }: BlockCompon
       isSending && "border-blue-500 ring-2 ring-blue-500/30 shadow-[0_0_25px_rgba(59,130,246,0.4)]",
       isSelected && !isSending ? "border-green-400 ring-2 ring-green-400/20" : !isSending && "border-slate-200 hover:border-slate-300"
     )}>
+      {/* Send button for simulation mode */}
+      {showSendButton && !isSending && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          onClick={handleSendClick}
+          className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-blue-500 text-white shadow-lg hover:bg-blue-600 hover:scale-110 transition-all"
+          title="Send input packet"
+        >
+          <Send size={14} />
+        </motion.button>
+      )}
+      
       {/* Sending indicator */}
       {isSending && (
         <motion.div 
@@ -482,21 +494,14 @@ const InputFileBlock = ({ block, isSelected, inputState, handlers }: BlockCompon
 };
 
 const DishBlock = ({ block, isSelected, isActive, dishState, handlers }: BlockComponentProps) => {
-  const connections = useStore((state) => state.connections);
-  const blocks = useStore((state) => state.blocks);
   const isReceiving = dishState === 'receiving';
   const isComplete = dishState === 'complete';
   
-  // Get all connected agents and their output files
-  const connectedAgents = React.useMemo(() => {
-    return connections
-      .filter(c => c.toId === block.id)
-      .map(c => blocks.find(b => b.id === c.fromId))
-      .filter((b): b is BlockType => !!b && b.type === 'chef');
-  }, [connections, blocks, block.id]);
+  // Optimized: Use dedicated hook for connected agents
+  const connectedAgents = useConnectedBlocksOfType(block.id, 'chef');
 
   // Aggregate all output files from connected agents
-  const aggregatedOutputs = React.useMemo(() => {
+  const aggregatedOutputs = useMemo(() => {
     const outputs: Array<{ agentId: string; agentTitle: string; file: OutputFile }> = [];
     connectedAgents.forEach(agent => {
       if (agent.data?.outputs) {
@@ -700,18 +705,29 @@ const MinimalBlockView = ({ block, isSelected }: BlockComponentProps) => {
 // --- Main Component ---
 
 export const Block: React.FC<BlockProps> = memo(({ block, scale }) => {
-  const selectBlock = useStore((state) => state.selectBlock);
-  const updateBlock = useStore((state) => state.updateBlock);
-  const deleteBlock = useStore((state) => state.deleteBlock);
-  const focusBlock = useStore((state) => state.focusBlock);
-  const setConnectingSourceId = useStore((state) => state.setConnectingSourceId);
-  const setHoveredBlockId = useStore((state) => state.setHoveredBlockId);
-  const setDraggingBlock = useStore((state) => state.setDraggingBlock);
+  // Only subscribe to data that affects rendering
+  const { selectedBlockIds, highlightedBlockIds } = useStore(useShallow((state) => ({
+    selectedBlockIds: state.selectedBlockIds,
+    highlightedBlockIds: state.highlightedBlockIds,
+  })));
+  
+  // Actions via getState() - no subscription needed for stable functions
+  const selectBlock = useCallback((id: string | null, multi?: boolean) => 
+    useStore.getState().selectBlock(id, multi), []);
+  const updateBlock = useCallback((id: string, data: Partial<BlockType>) => 
+    useStore.getState().updateBlock(id, data), []);
+  const deleteBlock = useCallback((id: string) => 
+    useStore.getState().deleteBlock(id), []);
+  const focusBlock = useCallback((id: string) => 
+    useStore.getState().focusBlock(id), []);
+  const setConnectingSourceId = useCallback((id: string | null) => 
+    useStore.getState().setConnectingSourceId(id), []);
+  const setHoveredBlockId = useCallback((id: string | null) => 
+    useStore.getState().setHoveredBlockId(id), []);
+  const setDraggingBlock = useCallback((id: string | null, pos: { x: number; y: number } | null) => 
+    useStore.getState().setDraggingBlock(id, pos), []);
 
-  const selectedBlockIds = useStore((state) => state.selectedBlockIds);
   const isSelected = selectedBlockIds.includes(block.id);
-
-  const highlightedBlockIds = useStore((state) => state.highlightedBlockIds);
 
   const isHighlighted = highlightedBlockIds.length > 0 && highlightedBlockIds.includes(block.id);
   const isDimmed = highlightedBlockIds.length > 0 && !isHighlighted;
@@ -797,17 +813,23 @@ export const Block: React.FC<BlockProps> = memo(({ block, scale }) => {
     onFocus: () => focusBlock(block.id),
   };
 
-  const activeNodeIds = useExecutionStore((state) => state.activeNodeIds);
-  const agentPhases = useExecutionStore((state) => state.agentPhases);
-  const contextStates = useExecutionStore((state) => state.contextStates);
-  const inputStates = useExecutionStore((state) => state.inputStates);
-  const dishStates = useExecutionStore((state) => state.dishStates);
-  
-  const isActive = activeNodeIds.includes(block.id);
-  const agentPhase = agentPhases.get(block.id) || 'idle';
-  const contextState = contextStates.get(block.id);
-  const inputState = inputStates.get(block.id);
-  const dishState = dishStates.get(block.id);
+  // Optimized: Only subscribe to THIS block's state, not entire Maps
+  // This prevents re-renders when OTHER blocks change state
+  const isActive = useExecutionStore(
+    useCallback((state) => state.activeNodeIds.includes(block.id), [block.id])
+  );
+  const agentPhase = useExecutionStore(
+    useCallback((state) => state.agentPhases.get(block.id) || 'idle', [block.id])
+  );
+  const contextState = useExecutionStore(
+    useCallback((state) => state.contextStates.get(block.id), [block.id])
+  );
+  const inputState = useExecutionStore(
+    useCallback((state) => state.inputStates.get(block.id), [block.id])
+  );
+  const dishState = useExecutionStore(
+    useCallback((state) => state.dishStates.get(block.id), [block.id])
+  );
 
   // Render specific block type with Level-of-Detail (LOD)
   const renderBlockContent = () => {

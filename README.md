@@ -356,6 +356,7 @@ Now analyze the following system and generate the JSON schema:
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture deep-dive |
 | [docs/FEATURES.md](docs/FEATURES.md) | Complete feature documentation |
 | [docs/JSON_SCHEMA.md](docs/JSON_SCHEMA.md) | Complete JSON import/export reference |
+| [docs/BUSINESS_ANALYSIS.md](docs/BUSINESS_ANALYSIS.md) | Market analysis & commercialization strategy |
 | [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md) | Implementation progress |
 | [docs/technical/](docs/technical/) | Technical specifications |
 

@@ -1,23 +1,25 @@
 import React, { memo, useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Undo2, Redo2, ZoomIn, ZoomOut, Maximize2, Play, Square, Gauge, Snail, Rabbit, ChevronUp } from 'lucide-react';
+import { Undo2, Redo2, ZoomIn, ZoomOut, Maximize2, Play, Pause, Gauge, Snail, Rabbit, ChevronUp, Zap, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { useExecutionStore } from '../store/useExecutionStore';
+import { useExecutionStore, type SimulationState } from '../store/useExecutionStore';
 import { cn } from '../lib/utils';
 
-// Speed presets
+// Speed presets - defined outside component to avoid recreation
 const SPEED_PRESETS = [
   { value: 0.25, label: 'Slow', icon: Snail },
   { value: 1, label: 'Normal', icon: Gauge },
   { value: 3, label: 'Fast', icon: Rabbit },
-];
+] as const;
 
-// Keyboard shortcuts hook
+// Keyboard shortcuts hook - optimized with stable refs
 const useKeyboardShortcuts = () => {
-  const isRunning = useExecutionStore((s) => s.simulationMode);
-  const setSimulationMode = useExecutionStore((s) => s.setSimulationMode);
+  // Only subscribe to values that affect the handler logic
+  const simulationState = useExecutionStore((s) => s.simulationState);
   const executionSpeed = useExecutionStore((s) => s.executionSpeed);
-  const setExecutionSpeed = useExecutionStore((s) => s.setExecutionSpeed);
+  
+  // Get actions once via getState - they're stable
+  const actionsRef = useRef(useExecutionStore.getState());
   
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -26,19 +28,35 @@ const useKeyboardShortcuts = () => {
         return;
       }
       
-      // Space = Play/Pause (prevent page scroll)
-      if (e.code === 'Space' && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        // Only toggle if not holding space for pan
-        if (!e.repeat) {
-          // Don't toggle immediately - wait to see if it's a pan gesture
-          // For now, use Shift+Space for simulation toggle
-        }
+      const { enterSimulation, exitSimulation, play, pause, resume, setExecutionSpeed } = actionsRef.current;
+      
+      // Escape = Exit simulation
+      if (e.key === 'Escape' && simulationState !== 'stopped') {
+        e.preventDefault();
+        exitSimulation();
+        return;
       }
       
-      // Shift+Space = Toggle simulation
+      // Enter = Enter simulation (when stopped)
+      if (e.key === 'Enter' && simulationState === 'stopped' && !e.ctrlKey && !e.shiftKey) {
+        e.preventDefault();
+        enterSimulation();
+        return;
+      }
+      
+      // Shift+Space = Toggle play/pause
       if (e.code === 'Space' && e.shiftKey && !e.repeat) {
         e.preventDefault();
-        setSimulationMode(!isRunning);
+        if (simulationState === 'stopped') {
+          enterSimulation();
+        } else if (simulationState === 'ready') {
+          play();
+        } else if (simulationState === 'running') {
+          pause();
+        } else if (simulationState === 'paused') {
+          resume();
+        }
+        return;
       }
       
       // Plus/Equal = Speed up (with or without shift)
@@ -55,8 +73,8 @@ const useKeyboardShortcuts = () => {
         setExecutionSpeed(newSpeed);
       }
       
-      // 1, 2, 3 = Speed presets (when simulation is running)
-      if (isRunning && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      // 1, 2, 3 = Speed presets (when in simulation)
+      if (simulationState !== 'stopped' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         if (e.key === '1') {
           e.preventDefault();
           setExecutionSpeed(0.25); // Slow
@@ -72,14 +90,17 @@ const useKeyboardShortcuts = () => {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isRunning, setSimulationMode, executionSpeed, setExecutionSpeed]);
+  }, [simulationState, executionSpeed]); // Only reactive values
 };
 
 const SpeedControl = memo(() => {
   const [isExpanded, setIsExpanded] = useState(false);
   const controlRef = useRef<HTMLDivElement>(null);
   const executionSpeed = useExecutionStore((s) => s.executionSpeed);
-  const setExecutionSpeed = useExecutionStore((s) => s.setExecutionSpeed);
+  
+  // Action accessed via getState - no subscription needed
+  const setExecutionSpeed = useCallback((speed: number) => 
+    useExecutionStore.getState().setExecutionSpeed(speed), []);
 
   // Close on click outside
   useEffect(() => {
@@ -198,38 +219,124 @@ const SpeedControl = memo(() => {
   );
 });
 
-const AnimationControls = () => {
-  const isRunning = useExecutionStore((s) => s.simulationMode);
-  const setSimulationMode = useExecutionStore((s) => s.setSimulationMode);
+// Simulation state indicator
+// State config - defined outside to avoid recreation
+const STATE_CONFIG = {
+  stopped: { label: 'Edit Mode', color: 'text-white/40', bg: 'bg-white/5' },
+  ready: { label: 'Ready', color: 'text-amber-400', bg: 'bg-amber-500/10' },
+  running: { label: 'Running', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  paused: { label: 'Paused', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+} as const;
 
-  const toggleRun = () => {
-    // ExecutionEngine handles all packet logic via setSimulationMode
-    // - start() sends initial triggers only from input_file blocks
-    // - stop() clears all state
-    setSimulationMode(!isRunning);
-  };
+const SimulationStateIndicator = memo(({ state }: { state: SimulationState }) => {
+  const config = STATE_CONFIG[state];
+  
+  return (
+    <div className={cn(
+      "px-3 py-1.5 rounded-lg text-xs font-medium",
+      config.bg, config.color
+    )}>
+      {state === 'running' && (
+        <span className="inline-block w-2 h-2 bg-emerald-400 rounded-full mr-2 animate-pulse" />
+      )}
+      {config.label}
+    </div>
+  );
+});
+
+// Optimized: single subscription for state, getState for actions
+const AnimationControls = memo(() => {
+  const simulationState = useExecutionStore((s) => s.simulationState);
+  
+  // Get actions via getState - they're stable and don't need subscriptions
+  const handleEnter = useCallback(() => useExecutionStore.getState().enterSimulation(), []);
+  const handleExit = useCallback(() => useExecutionStore.getState().exitSimulation(), []);
+  const handlePlay = useCallback(() => useExecutionStore.getState().play(), []);
+  const handlePause = useCallback(() => useExecutionStore.getState().pause(), []);
+  const handleResume = useCallback(() => useExecutionStore.getState().resume(), []);
 
   return (
-    <>
-      <button
-        onClick={toggleRun}
-        aria-label={isRunning ? "Stop Animation" : "Start Animation"}
-        className={cn(
-          "p-2.5 rounded-xl transition-all",
-          isRunning
-            ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
-            : 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-        )}
-        title={isRunning ? "Stop Animation (Shift+Space)" : "Start Animation (Shift+Space)"}
-      >
-        {isRunning ? <Square size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
-      </button>
-
-      {isRunning && <SpeedControl />}
-    </>
+    <div className="flex items-center gap-2">
+      {/* State indicator */}
+      <SimulationStateIndicator state={simulationState} />
+      
+      {/* Main action button */}
+      {simulationState === 'stopped' && (
+        <button
+          onClick={handleEnter}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-all"
+          title="Enter Simulation Mode (Enter)"
+        >
+          <Zap size={16} />
+          <span className="text-sm font-medium">Simulate</span>
+        </button>
+      )}
+      
+      {simulationState === 'ready' && (
+        <>
+          <button
+            onClick={handleExit}
+            className="p-2.5 rounded-xl bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition-all"
+            title="Exit Simulation (Esc)"
+          >
+            <X size={16} />
+          </button>
+          <button
+            onClick={handlePlay}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-all"
+            title="Play All (Shift+Space)"
+          >
+            <Play size={16} fill="currentColor" />
+            <span className="text-sm font-medium">Play All</span>
+          </button>
+          <SpeedControl />
+        </>
+      )}
+      
+      {simulationState === 'running' && (
+        <>
+          <button
+            onClick={handleExit}
+            className="p-2.5 rounded-xl bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition-all"
+            title="Exit Simulation (Esc)"
+          >
+            <X size={16} />
+          </button>
+          <button
+            onClick={handlePause}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-all"
+            title="Pause (Shift+Space)"
+          >
+            <Pause size={16} fill="currentColor" />
+            <span className="text-sm font-medium">Pause</span>
+          </button>
+          <SpeedControl />
+        </>
+      )}
+      
+      {simulationState === 'paused' && (
+        <>
+          <button
+            onClick={handleExit}
+            className="p-2.5 rounded-xl bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition-all"
+            title="Exit Simulation (Esc)"
+          >
+            <X size={16} />
+          </button>
+          <button
+            onClick={handleResume}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-all"
+            title="Resume (Shift+Space)"
+          >
+            <Play size={16} fill="currentColor" />
+            <span className="text-sm font-medium">Resume</span>
+          </button>
+          <SpeedControl />
+        </>
+      )}
+    </div>
   );
-};
-
+});
 export const BottomBar: React.FC = memo(() => {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);

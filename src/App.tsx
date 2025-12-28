@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { Block, BlockType } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Board } from './components/Board';
@@ -12,29 +13,32 @@ import { useStore } from './store/useStore';
 import { getBlockDimensions } from './lib/layoutUtils';
 
 function App() {
-  // Global State
-  const blocks = useStore((state) => state.blocks);
-  const groups = useStore((state) => state.groups);
-  const connections = useStore((state) => state.connections);
-  const selectedId = useStore((state) => state.selectedId);
-  const selectedGroupId = useStore((state) => state.selectedGroupId);
-  const selectedConnectionId = useStore((state) => state.selectedConnectionId);
-  const view = useStore((state) => state.view);
-  const connectingSourceId = useStore((state) => state.connectingSourceId);
-  const hoveredBlockId = useStore((state) => state.hoveredBlockId);
-  const selectionPriority = useStore((state) => state.selectionPriority);
+  // Consolidated store subscription - single subscription instead of 17+
+  const { 
+    blocks, groups, connections, 
+    selectedId, selectedGroupId, selectedConnectionId, 
+    view, connectingSourceId, hoveredBlockId, selectionPriority 
+  } = useStore(
+    useShallow((s) => ({
+      blocks: s.blocks,
+      groups: s.groups,
+      connections: s.connections,
+      selectedId: s.selectedId,
+      selectedGroupId: s.selectedGroupId,
+      selectedConnectionId: s.selectedConnectionId,
+      view: s.view,
+      connectingSourceId: s.connectingSourceId,
+      hoveredBlockId: s.hoveredBlockId,
+      selectionPriority: s.selectionPriority,
+    }))
+  );
 
-  // Actions
-  const deleteBlock = useStore((state) => state.deleteBlock);
-  const deleteGroup = useStore((state) => state.deleteGroup);
-  const deleteConnection = useStore((state) => state.deleteConnection);
-  const updateView = useStore((state) => state.updateView);
-  const selectBlock = useStore((state) => state.selectBlock);
-  const selectGroup = useStore((state) => state.selectGroup);
-  const selectConnection = useStore((state) => state.selectConnection);
-  const setConnectingSourceId = useStore((state) => state.setConnectingSourceId);
-  const setTempConnectionPos = useStore((state) => state.setTempConnectionPos);
-  const addConnection = useStore((state) => state.addConnection);
+  // Actions accessed via getState() - no subscription needed
+  const { 
+    deleteBlock, deleteGroup, deleteConnection,
+    updateView, selectBlock, selectGroup, selectConnection,
+    setConnectingSourceId, setTempConnectionPos, addConnection 
+  } = useStore.getState();
 
   // Local Interaction State
   const [isPanning, setIsPanning] = useState(false);

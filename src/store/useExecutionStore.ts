@@ -3,17 +3,26 @@
  * 
  * Integrates with ExecutionEngine v2.0 (Event-Driven State Machine)
  * 
+ * States:
+ * - stopped: No simulation, everything reset
+ * - ready: Simulation mode active, waiting for user to trigger inputs
+ * - running: Packets are moving, simulation is live
+ * - paused: Simulation frozen, can inspect packets
+ * 
  * Flow:
- * 1. User clicks Play → setSimulationMode(true) → engine.start()
- * 2. Engine sends packets only from input_file blocks
- * 3. Packets trigger agent state transitions (idle → collecting → processing → outputting)
- * 4. Context files only respond to query packets from agents
+ * 1. User enters simulation mode → 'ready' state
+ * 2. User clicks Play or triggers input → 'running' state  
+ * 3. User can pause → 'paused' state (packets frozen)
+ * 4. User exits simulation → 'stopped' state (reset)
  */
 
 import { create } from 'zustand';
 import { executionEngine, type AgentPhase } from '../lib/executionEngineV2';
 import { ExecutionLogManager } from '../components/ExecutionLog';
 import { useStore } from './useStore';
+
+// Simulation state machine
+export type SimulationState = 'stopped' | 'ready' | 'running' | 'paused';
 
 // Visual packet representation for rendering
 export type DataPacket = {
@@ -37,10 +46,13 @@ export interface CollectingProgress {
 }
 
 interface ExecutionState {
-  // Core state
+  // Core state - new state machine
+  simulationState: SimulationState;
+  executionSpeed: number;
+  
+  // Legacy compatibility (derived from simulationState)
   isRunning: boolean;
   simulationMode: boolean;
-  executionSpeed: number;
   
   // Active elements
   activeNodeIds: string[];
@@ -54,9 +66,22 @@ interface ExecutionState {
   
   // Collecting progress (Phase 4)
   collectingProgress: Map<string, CollectingProgress>;
+  
+  // Packet inspection (for paused state)
+  selectedPacketId: string | null;
 
-  // Actions
+  // Actions - new state machine
+  enterSimulation: () => void;     // stopped → ready
+  exitSimulation: () => void;      // * → stopped  
+  play: () => void;                // ready/paused → running (auto-triggers all inputs)
+  pause: () => void;               // running → paused
+  resume: () => void;              // paused → running
+  triggerInput: (blockId: string) => void;  // Manual trigger single input (in ready/running)
+  selectPacket: (packetId: string | null) => void;
+  
+  // Legacy action (for backward compatibility)
   setSimulationMode: (enabled: boolean) => void;
+  
   setExecutionSpeed: (speed: number) => void;
   setAgentPhase: (agentId: string, phase: AgentPhase) => void;
   getAgentPhase: (agentId: string) => AgentPhase;
@@ -71,9 +96,13 @@ interface ExecutionState {
 
 export const useExecutionStore = create<ExecutionState>((set, get) => ({
   // Initial state
+  simulationState: 'stopped',
+  executionSpeed: 1,
+  
+  // Legacy compatibility (derived)
   isRunning: false,
   simulationMode: false,
-  executionSpeed: 1,
+  
   activeNodeIds: [],
   dataPackets: [],
   agentPhases: new Map(),
@@ -81,24 +110,115 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   inputStates: new Map(),
   dishStates: new Map(),
   collectingProgress: new Map(),
+  selectedPacketId: null,
 
-  setSimulationMode: (enabled) => {
-    set({ simulationMode: enabled, isRunning: enabled });
-    if (enabled) {
-      ExecutionLogManager.addEvent('simulation_start', {});
+  // Enter simulation mode (stopped → ready)
+  enterSimulation: () => {
+    ExecutionLogManager.addEvent('simulation_enter', {});
+    executionEngine.enterReady();
+    set({ 
+      simulationState: 'ready',
+      simulationMode: true,
+      isRunning: false,
+    });
+  },
+
+  // Exit simulation (reset everything)
+  exitSimulation: () => {
+    ExecutionLogManager.addEvent('simulation_exit', {});
+    executionEngine.stop();
+    set({ 
+      simulationState: 'stopped',
+      simulationMode: false,
+      isRunning: false,
+      dataPackets: [], 
+      agentPhases: new Map(), 
+      activeNodeIds: [],
+      contextStates: new Map(),
+      inputStates: new Map(),
+      dishStates: new Map(),
+      collectingProgress: new Map(),
+      selectedPacketId: null,
+    });
+  },
+
+  // Play (ready → running, triggers all inputs)
+  play: () => {
+    const state = get().simulationState;
+    if (state !== 'ready' && state !== 'paused') return;
+    
+    ExecutionLogManager.addEvent('simulation_play', {});
+    
+    if (state === 'ready') {
+      // Start fresh - trigger all inputs
       executionEngine.start();
     } else {
-      ExecutionLogManager.addEvent('simulation_stop', {});
-      executionEngine.stop();
+      // Resume from pause
+      executionEngine.resume();
+    }
+    
+    set({ 
+      simulationState: 'running',
+      isRunning: true,
+    });
+  },
+
+  // Pause (running → paused)
+  pause: () => {
+    if (get().simulationState !== 'running') return;
+    
+    ExecutionLogManager.addEvent('simulation_pause', {});
+    executionEngine.pause();
+    set({ 
+      simulationState: 'paused',
+      isRunning: false,
+    });
+  },
+
+  // Resume (paused → running)
+  resume: () => {
+    if (get().simulationState !== 'paused') return;
+    
+    ExecutionLogManager.addEvent('simulation_resume', {});
+    executionEngine.resume();
+    set({ 
+      simulationState: 'running',
+      isRunning: true,
+    });
+  },
+
+  // Trigger single input block manually
+  triggerInput: (blockId: string) => {
+    const state = get().simulationState;
+    if (state !== 'ready' && state !== 'running') return;
+    
+    ExecutionLogManager.addEvent('manual_trigger', { blockId });
+    
+    // If in ready state, transition to running
+    if (state === 'ready') {
+      executionEngine.startWithoutAutoTrigger();
       set({ 
-        dataPackets: [], 
-        agentPhases: new Map(), 
-        activeNodeIds: [],
-        contextStates: new Map(),
-        inputStates: new Map(),
-        dishStates: new Map(),
-        collectingProgress: new Map(),
+        simulationState: 'running',
+        isRunning: true,
       });
+    }
+    
+    // Trigger the specific input
+    executionEngine.triggerInputBlock(blockId);
+  },
+
+  // Select packet for inspection
+  selectPacket: (packetId) => {
+    set({ selectedPacketId: packetId });
+  },
+
+  // Legacy compatibility
+  setSimulationMode: (enabled) => {
+    if (enabled) {
+      get().enterSimulation();
+      get().play();
+    } else {
+      get().exitSimulation();
     }
   },
   
@@ -230,14 +350,9 @@ executionEngine.setCallbacks({
     }));
   },
   
-  onPacketProgressUpdated: (packetId, progress) => {
-    // Sync progress from engine to store for visualization
-    useExecutionStore.setState((s) => ({
-      dataPackets: s.dataPackets.map(p => 
-        p.id === packetId ? { ...p, progress } : p
-      )
-    }));
-  },
+  // NOTE: onPacketProgressUpdated REMOVED for performance!
+  // Progress is managed directly by executionEngine, canvas reads via engine.getPackets()
+  // This was causing 60+ setState calls per packet per second
   
   onAgentPhaseChanged: (agentId, phase) => {
     ExecutionLogManager.addEvent('phase_changed', {

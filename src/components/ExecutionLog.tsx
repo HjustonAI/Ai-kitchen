@@ -24,7 +24,9 @@ import { cn } from '../lib/utils';
 export interface ExecutionEvent {
   id: string;
   timestamp: number;
-  type: 'packet_created' | 'packet_completed' | 'phase_changed' | 'context_state' | 'dish_state' | 'simulation_start' | 'simulation_stop';
+  type: 'packet_created' | 'packet_completed' | 'phase_changed' | 'context_state' | 'dish_state' | 
+        'simulation_start' | 'simulation_stop' | 'simulation_enter' | 'simulation_exit' | 
+        'simulation_play' | 'simulation_pause' | 'simulation_resume' | 'manual_trigger';
   data: Record<string, unknown>;
 }
 

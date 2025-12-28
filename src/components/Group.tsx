@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Rnd } from 'react-rnd';
 import type { DraggableData, ResizableDelta, Position } from 'react-rnd';
 import { X, ChevronDown, ChevronRight } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
 import type { Group as GroupType } from '../types';
@@ -12,13 +13,24 @@ interface GroupProps {
 }
 
 export const Group: React.FC<GroupProps> = ({ group, scale }) => {
-  const updateGroup = useStore((state) => state.updateGroup);
-  const deleteGroup = useStore((state) => state.deleteGroup);
-  const selectGroup = useStore((state) => state.selectGroup);
-  const toggleGroupCollapse = useStore((state) => state.toggleGroupCollapse);
-  const isSelected = useStore((state) => state.selectedGroupId === group.id);
-  const draggingBlockId = useStore((state) => state.draggingBlockId);
-  const draggingPos = useStore((state) => state.draggingPos);
+  // Consolidated store subscriptions - only reactive values
+  const { isSelected, draggingBlockId, draggingPos } = useStore(
+    useShallow((s) => ({
+      isSelected: s.selectedGroupId === group.id,
+      draggingBlockId: s.draggingBlockId,
+      draggingPos: s.draggingPos,
+    }))
+  );
+  
+  // Actions via getState - no subscriptions needed
+  const updateGroup = useCallback((id: string, data: Partial<GroupType>) => 
+    useStore.getState().updateGroup(id, data), []);
+  const deleteGroup = useCallback((id: string) => 
+    useStore.getState().deleteGroup(id), []);
+  const selectGroup = useCallback((id: string | null) => 
+    useStore.getState().selectGroup(id), []);
+  const toggleGroupCollapse = useCallback((id: string) => 
+    useStore.getState().toggleGroupCollapse(id), []);
   
   const [isDragging, setIsDragging] = useState(false);
   const [title, setTitle] = useState(group.title);

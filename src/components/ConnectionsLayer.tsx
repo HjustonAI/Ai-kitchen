@@ -1,10 +1,11 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useCallback } from 'react';
 import { useStore } from '../store/useStore';
-import { useExecutionStore } from '../store/useExecutionStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { Block, Connection } from '../types';
 import { getBlockCenter, getBlockDimensions } from '../lib/layoutUtils';
 import { cn } from '../lib/utils';
 import { getBezierPath } from '../lib/animationUtilsOptimized';
+import { executionEngine } from '../lib/executionEngineV2';
 
 // Packet type to glow color mapping
 const PACKET_GLOW_COLORS: Record<string, string> = {
@@ -27,6 +28,7 @@ const ConnectionLine = memo(({
   scale, 
   ghostOpacity,
   activePacket,
+  onSelect,
 }: {
   conn: Connection,
   fromBlock: Block,
@@ -39,8 +41,8 @@ const ConnectionLine = memo(({
   scale: number,
   ghostOpacity?: number,
   activePacket?: { type: string; progress: number } | null,
+  onSelect: (id: string) => void,
 }) => {
-  const selectConnection = useStore((state) => state.selectConnection);
 
   const start = getBlockCenter(fromBlock, draggingBlockId, draggingPos, scale);
   const end = getBlockCenter(toBlock, draggingBlockId, draggingPos, scale);
@@ -80,7 +82,7 @@ const ConnectionLine = memo(({
       style={{ opacity: ghostOpacity }}
       onClick={(e) => {
         e.stopPropagation();
-        selectConnection(conn.id);
+        onSelect(conn.id);
       }}>
       {/* Invisible wider path for easier clicking */}
       <path
@@ -135,26 +137,42 @@ const ConnectionLine = memo(({
 });
 
 export const ConnectionsLayer: React.FC = () => {
-  const blocks = useStore((state) => state.blocks);
-  const groups = useStore((state) => state.groups);
-  const connections = useStore((state) => state.connections);
-  const connectingSourceId = useStore((state) => state.connectingSourceId);
-  const tempConnectionPos = useStore((state) => state.tempConnectionPos);
-  const selectedConnectionId = useStore((state) => state.selectedConnectionId);
-  const highlightedConnectionIds = useStore((state) => state.highlightedConnectionIds);
-  const draggingBlockId = useStore((state) => state.draggingBlockId);
-  const draggingPos = useStore((state) => state.draggingPos);
+  // Consolidated subscriptions for better performance
+  const {
+    blocks,
+    groups,
+    connections,
+    connectingSourceId,
+    tempConnectionPos,
+    selectedConnectionId,
+    highlightedConnectionIds,
+    draggingBlockId,
+    draggingPos,
+    hoveredBlockId,
+    selectedBlockIds,
+    selectConnection,
+  } = useStore(useShallow((state) => ({
+    blocks: state.blocks,
+    groups: state.groups,
+    connections: state.connections,
+    connectingSourceId: state.connectingSourceId,
+    tempConnectionPos: state.tempConnectionPos,
+    selectedConnectionId: state.selectedConnectionId,
+    highlightedConnectionIds: state.highlightedConnectionIds,
+    draggingBlockId: state.draggingBlockId,
+    draggingPos: state.draggingPos,
+    hoveredBlockId: state.hoveredBlockId,
+    selectedBlockIds: state.selectedBlockIds,
+    selectConnection: state.selectConnection,
+  })));
   const scale = useStore((state) => state.view.scale);
-  const hoveredBlockId = useStore((state) => state.hoveredBlockId);
-  const selectedBlockIds = useStore((state) => state.selectedBlockIds);
   
-  // Subscribe to active packets for connection glow effects
-  const dataPackets = useExecutionStore((state) => state.dataPackets);
-  
-  // Build map of connectionId -> active packet info for glow effects
+  // Get active packets directly from engine for glow effects (bypasses store for performance)
+  // This is computed on each render, but ConnectionsLayer only re-renders when blocks/connections change
   const activeConnectionPackets = useMemo(() => {
     const map = new Map<string, { type: string; progress: number }>();
-    dataPackets.forEach(packet => {
+    const packets = executionEngine.getPackets();
+    packets.forEach(packet => {
       // Only track packets that are actively traveling (not at endpoints)
       if (packet.progress > 0.02 && packet.progress < 0.98) {
         const existing = map.get(packet.connectionId);
@@ -165,7 +183,9 @@ export const ConnectionsLayer: React.FC = () => {
       }
     });
     return map;
-  }, [dataPackets]);
+    // Note: No dependencies - this is intentionally computed fresh each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks, connections]); // Re-compute when topology changes
 
   // Optimize block lookup
   const blockMap = React.useMemo(() => {
@@ -397,6 +417,7 @@ export const ConnectionsLayer: React.FC = () => {
             scale={scale}
             ghostOpacity={isGhost ? 0.05 : undefined}
             activePacket={bundleActivePacket}
+            onSelect={selectConnection}
           />
         );
       })}

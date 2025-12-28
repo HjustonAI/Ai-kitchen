@@ -115,21 +115,20 @@ export const ExecutionLayerOptimized: React.FC = () => {
   const view = useStore((s) => s.view);
   
   const simulationMode = useExecutionStore((s) => s.simulationMode);
-  const dataPackets = useExecutionStore((s) => s.dataPackets);
+  // NOTE: dataPackets subscription removed for performance!
+  // Packets are now read directly from executionEngine.getPackets() in render loop
 
   // Refs for stable render loop
   const blocksRef = useRef(blocks);
   const groupsRef = useRef(groups);
   const connectionsRef = useRef(connections);
   const viewRef = useRef(view);
-  const dataPacketsRef = useRef(dataPackets);
   
   // Sync refs
   useEffect(() => { blocksRef.current = blocks; }, [blocks]);
   useEffect(() => { groupsRef.current = groups; }, [groups]);
   useEffect(() => { connectionsRef.current = connections; }, [connections]);
   useEffect(() => { viewRef.current = view; }, [view]);
-  useEffect(() => { dataPacketsRef.current = dataPackets; }, [dataPackets]);
 
   // Canvas and systems
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -200,11 +199,10 @@ export const ExecutionLayerOptimized: React.FC = () => {
       const currentGroups = groupsRef.current;
       const currentConnections = connectionsRef.current;
       const currentView = viewRef.current;
-      const currentPackets = dataPacketsRef.current;
       
-      // Get execution state
-      const executionState = useExecutionStore.getState();
-      const { executionSpeed, isRunning: execRunning } = executionState;
+      // Get packets DIRECTLY from engine (bypasses store for performance)
+      // Engine.update() is called externally, here we just read current state
+      const currentPackets = executionEngine.getPackets();
       
       // Get drag state
       const mainState = useStore.getState();

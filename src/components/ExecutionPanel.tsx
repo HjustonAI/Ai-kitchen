@@ -6,7 +6,7 @@
 
 import React, { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, ChevronRight, ChevronLeft, X } from 'lucide-react';
+import { Activity, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useExecutionStore } from '../store/useExecutionStore';
 import { ExecutionMonitor } from './ExecutionMonitor';
 import { ExecutionLog } from './ExecutionLog';
@@ -15,7 +15,8 @@ import { cn } from '../lib/utils';
 export const ExecutionPanel: React.FC = memo(() => {
   const simulationMode = useExecutionStore((s) => s.simulationMode);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const dataPackets = useExecutionStore((s) => s.dataPackets);
+  // Only subscribe to packet count for display
+  const packetCount = useExecutionStore((s) => s.dataPackets.length);
 
   if (!simulationMode) return null;
 
@@ -44,7 +45,7 @@ export const ExecutionPanel: React.FC = memo(() => {
             <span className="text-sm font-bold text-white/80">Live Execution</span>
             <div className="ml-auto flex items-center gap-1">
               <span className="text-[10px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded animate-pulse">
-                {dataPackets.length > 0 ? `${dataPackets.length} active` : 'running'}
+                {packetCount > 0 ? `${packetCount} active` : 'running'}
               </span>
             </div>
           </motion.div>

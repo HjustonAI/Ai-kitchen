@@ -3,7 +3,7 @@
  * Shows active packets, agent phases, and block states during simulation
  */
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Activity, 
@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { useExecutionStore } from '../store/useExecutionStore';
 import { useStore } from '../store/useStore';
+import { useBlocksByType, useBlockMap } from '../lib/useBlockLookup';
+import { executionEngine } from '../lib/executionEngineV2';
 import { cn } from '../lib/utils';
 
 // Packet type colors
@@ -49,26 +51,40 @@ const CONTEXT_STATE_CONFIG: Record<string, { icon: React.ElementType; label: str
 };
 
 const PacketList = memo(() => {
-  const dataPackets = useExecutionStore((s) => s.dataPackets);
-  const blocks = useStore((s) => s.blocks);
+  // Get packet count from store (triggers re-render on create/remove only)
+  const storePacketCount = useExecutionStore((s) => s.dataPackets.length);
+  const blockMap = useBlockMap(); // O(1) lookups
   const connections = useStore((s) => s.connections);
   
-  if (dataPackets.length === 0) {
+  // Get actual packets with progress from engine (for display)
+  // This is computed fresh each render but PacketList only re-renders when count changes
+  const packets = useMemo(() => executionEngine.getPackets(), [storePacketCount]);
+  
+  // Memoize connection map for O(1) lookups
+  const connectionMap = useMemo(() => {
+    const map = new Map<string, typeof connections[0]>();
+    for (const conn of connections) {
+      map.set(conn.id, conn);
+    }
+    return map;
+  }, [connections]);
+  
+  if (packets.length === 0) {
     return (
       <div className="text-xs text-white/30 italic py-1">No active packets</div>
     );
   }
   
-  // Get block name helper
+  // Get block name helper - O(1) lookup
   const getBlockName = (blockId: string) => {
-    const block = blocks.find(b => b.id === blockId);
+    const block = blockMap.get(blockId);
     return block?.title || blockId.slice(0, 8);
   };
   
   return (
     <div className="space-y-1">
-      {dataPackets.slice(0, 5).map(packet => {
-        const conn = connections.find(c => c.id === packet.connectionId);
+      {packets.slice(0, 5).map(packet => {
+        const conn = connectionMap.get(packet.connectionId);
         const config = PACKET_COLORS[packet.type] || PACKET_COLORS.input;
         const fromName = conn ? getBlockName(conn.fromId) : '?';
         const toName = conn ? getBlockName(conn.toId) : '?';
@@ -80,14 +96,14 @@ const PacketList = memo(() => {
             <span className={cn("font-medium", config.text)}>{packet.type}</span>
             <ArrowRight size={10} className="text-white/30" />
             <span className="text-white/60 truncate flex-1">
-              {packet.isReverse ? `${toName} → ${fromName}` : `${fromName} → ${toName}`}
+              {(packet as any).isReverse ? `${toName} → ${fromName}` : `${fromName} → ${toName}`}
             </span>
             <span className="text-white/40 font-mono">{progressPercent}%</span>
           </div>
         );
       })}
-      {dataPackets.length > 5 && (
-        <div className="text-xs text-white/40 pl-2">+{dataPackets.length - 5} more...</div>
+      {packets.length > 5 && (
+        <div className="text-xs text-white/40 pl-2">+{packets.length - 5} more...</div>
       )}
     </div>
   );
@@ -95,9 +111,8 @@ const PacketList = memo(() => {
 
 const AgentStateList = memo(() => {
   const agentPhases = useExecutionStore((s) => s.agentPhases);
-  const blocks = useStore((s) => s.blocks);
-  
-  const agents = blocks.filter(b => b.type === 'chef');
+  // Optimized: use pre-filtered hook instead of subscribing to all blocks
+  const agents = useBlocksByType('chef');
   
   if (agents.length === 0) {
     return (
@@ -127,9 +142,8 @@ const AgentStateList = memo(() => {
 
 const ContextStateList = memo(() => {
   const contextStates = useExecutionStore((s) => s.contextStates);
-  const blocks = useStore((s) => s.blocks);
-  
-  const contextFiles = blocks.filter(b => b.type === 'context_file');
+  // Optimized: use pre-filtered hook
+  const contextFiles = useBlocksByType('context_file');
   
   // Only show contexts that have active states
   const activeContexts = contextFiles.filter(c => contextStates.get(c.id) && contextStates.get(c.id) !== 'idle');
@@ -160,9 +174,9 @@ const ContextStateList = memo(() => {
 
 const DishStateList = memo(() => {
   const dishStates = useExecutionStore((s) => s.dishStates);
-  const blocks = useStore((s) => s.blocks);
   
-  const dishes = blocks.filter(b => b.type === 'dish');
+  // Use memoized hook instead of filtering blocks array
+  const dishes = useBlocksByType('dish');
   
   // Only show dishes that have active states
   const activeDishes = dishes.filter(d => dishStates.get(d.id) && dishStates.get(d.id) !== 'idle');

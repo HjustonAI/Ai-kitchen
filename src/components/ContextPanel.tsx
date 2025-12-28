@@ -1,6 +1,7 @@
 import { useMemo, memo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Scroll, ChefHat, ExternalLink, Layers, BoxSelect, Utensils, StickyNote, FileText, Keyboard, Settings, Cpu, Thermometer, Hash, ChevronDown, ChevronRight, FileOutput, Plus, Trash2, FolderOpen } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
 import type { Block, BlockData, OutputFile, OutputFileFormat } from '../types';
@@ -47,16 +48,20 @@ const CollapsibleSection = ({ title, count, icon, children, defaultOpen = true }
 // --- Content Component (Heavy Logic) ---
 
 const ContextPanelContent = memo(({ mode }: { mode: 'single' | 'multi' | 'group' }) => {
-  const selectedBlockIds = useStore((state) => state.selectedBlockIds);
-  const selectedGroupId = useStore((state) => state.selectedGroupId);
-  const highlightedBlockIds = useStore((state) => state.highlightedBlockIds);
-  const blocks = useStore((state) => state.blocks);
-  const groups = useStore((state) => state.groups);
-  const connections = useStore((state) => state.connections);
-  const selectBlock = useStore((state) => state.selectBlock);
-  const selectGroup = useStore((state) => state.selectGroup);
-  const focusBlock = useStore((state) => state.focusBlock);
-  const updateBlock = useStore((state) => state.updateBlock);
+  // Consolidated store subscriptions - single subscription instead of 10
+  const { selectedBlockIds, selectedGroupId, highlightedBlockIds, blocks, groups, connections } = useStore(
+    useShallow((s) => ({
+      selectedBlockIds: s.selectedBlockIds,
+      selectedGroupId: s.selectedGroupId,
+      highlightedBlockIds: s.highlightedBlockIds,
+      blocks: s.blocks,
+      groups: s.groups,
+      connections: s.connections,
+    }))
+  );
+  
+  // Actions accessed via getState() - no subscription needed
+  const { selectBlock, selectGroup, focusBlock, updateBlock } = useStore.getState();
 
   // --- Data Preparation ---
 

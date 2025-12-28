@@ -3,7 +3,7 @@
  * Shows live execution info when simulation is active
  */
 
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Activity, 
@@ -16,13 +16,13 @@ import {
   Send,
   FileText,
   Utensils,
-  Download,
-  CheckCircle2,
   ScrollText,
   Trash2
 } from 'lucide-react';
-import { useExecutionStore, type CollectingProgress } from '../store/useExecutionStore';
+import { useExecutionStore } from '../store/useExecutionStore';
 import { useStore } from '../store/useStore';
+import { useBlocksByType, useBlockMap } from '../lib/useBlockLookup';
+import { executionEngine } from '../lib/executionEngineV2';
 import { ExecutionLogManager } from './ExecutionLog';
 import { cn } from '../lib/utils';
 
@@ -92,17 +92,21 @@ const CollapsibleSection = memo(({
 
 // Compact packet list
 const PacketIndicator = memo(() => {
-  const dataPackets = useExecutionStore((s) => s.dataPackets);
+  // Subscribe to packet count only (triggers re-render on create/remove)
+  const packetCount = useExecutionStore((s) => s.dataPackets.length);
   
-  if (dataPackets.length === 0) {
+  // Get actual packets from engine for grouping
+  const grouped = useMemo(() => {
+    const packets = executionEngine.getPackets();
+    return packets.reduce((acc, p) => {
+      acc[p.type] = (acc[p.type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [packetCount]);
+  
+  if (packetCount === 0) {
     return <div className="text-[10px] text-white/30 italic pl-5">No packets</div>;
   }
-  
-  // Group by type for compact display
-  const grouped = dataPackets.reduce((acc, p) => {
-    acc[p.type] = (acc[p.type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
   
   return (
     <div className="flex flex-wrap gap-1.5 pl-5">
@@ -124,9 +128,9 @@ const PacketIndicator = memo(() => {
 const AgentStates = memo(() => {
   const agentPhases = useExecutionStore((s) => s.agentPhases);
   const collectingProgress = useExecutionStore((s) => s.collectingProgress);
-  const blocks = useStore((s) => s.blocks);
   
-  const agents = blocks.filter(b => b.type === 'chef');
+  // Use memoized hook instead of filtering blocks array
+  const agents = useBlocksByType('chef');
   
   if (agents.length === 0) {
     return <div className="text-[10px] text-white/30 italic pl-5">No agents</div>;
@@ -160,15 +164,17 @@ const AgentStates = memo(() => {
 const ActiveBlockStates = memo(() => {
   const contextStates = useExecutionStore((s) => s.contextStates);
   const dishStates = useExecutionStore((s) => s.dishStates);
-  const blocks = useStore((s) => s.blocks);
+  
+  // Use memoized block map for O(1) lookups
+  const blockMap = useBlockMap();
   
   const activeContexts = Array.from(contextStates.entries())
     .filter(([, state]) => state !== 'idle')
-    .map(([id, state]) => ({ id, state, block: blocks.find(b => b.id === id) }));
+    .map(([id, state]) => ({ id, state, block: blockMap.get(id) }));
     
   const activeDishes = Array.from(dishStates.entries())
     .filter(([, state]) => state !== 'idle')
-    .map(([id, state]) => ({ id, state, block: blocks.find(b => b.id === id) }));
+    .map(([id, state]) => ({ id, state, block: blockMap.get(id) }));
   
   if (activeContexts.length === 0 && activeDishes.length === 0) {
     return null;
@@ -243,7 +249,8 @@ const MiniLog = memo(() => {
 
 export const SidebarExecutionSection: React.FC = memo(() => {
   const simulationMode = useExecutionStore((s) => s.simulationMode);
-  const dataPackets = useExecutionStore((s) => s.dataPackets);
+  // Only subscribe to packet count for performance
+  const packetCount = useExecutionStore((s) => s.dataPackets.length);
   
   if (!simulationMode) return null;
   
@@ -259,13 +266,13 @@ export const SidebarExecutionSection: React.FC = memo(() => {
         <Activity size={14} className="text-cyan-400 animate-pulse" />
         <span className="text-xs font-bold text-white/80 uppercase tracking-wider">Live</span>
         <span className="text-[9px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded">
-          {dataPackets.length} packets
+          {packetCount} packets
         </span>
       </div>
       
       {/* Compact Stats */}
       <div className="space-y-2">
-        <CollapsibleSection title="Packets" count={dataPackets.length} icon={Activity} accentColor="text-cyan-400">
+        <CollapsibleSection title="Packets" count={packetCount} icon={Activity} accentColor="text-cyan-400">
           <PacketIndicator />
         </CollapsibleSection>
         

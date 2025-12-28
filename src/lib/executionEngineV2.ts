@@ -79,8 +79,12 @@ export class ExecutionEngine {
   private connections: Connection[] = [];
   private speed: number = 1;
   private isRunning: boolean = false;
+  private isPaused: boolean = false;
   private lastUpdate: number = 0;
   private packetIdCounter: number = 0;
+  
+  // Performance cache: O(1) block lookups
+  private blockMap: Map<string, Block> = new Map();
   
   // Callbacks
   onPacketCreated?: (packet: FlowPacket) => void;
@@ -95,6 +99,11 @@ export class ExecutionEngine {
   
   // Collecting progress callback (for UI display)
   onCollectingProgress?: (agentId: string, received: number, total: number) => void;
+  
+  // Helper: O(1) block lookup
+  private getBlock(id: string): Block | undefined {
+    return this.blockMap.get(id);
+  }
 
   // ============ Setup ============
 
@@ -103,16 +112,30 @@ export class ExecutionEngine {
     onPacketRemoved?: (packetId: string) => void;
     onPacketProgressUpdated?: (packetId: string, progress: number) => void;
     onAgentPhaseChanged?: (agentId: string, phase: AgentPhase) => void;
+    onContextStateChanged?: (blockId: string, state: 'idle' | 'receiving' | 'processing' | 'sending') => void;
+    onInputStateChanged?: (blockId: string, state: 'idle' | 'sending') => void;
+    onDishStateChanged?: (blockId: string, state: 'idle' | 'receiving' | 'complete') => void;
+    onCollectingProgress?: (agentId: string, received: number, total: number) => void;
   }) {
     this.onPacketCreated = callbacks.onPacketCreated;
     this.onPacketRemoved = callbacks.onPacketRemoved;
     this.onPacketProgressUpdated = callbacks.onPacketProgressUpdated;
     this.onAgentPhaseChanged = callbacks.onAgentPhaseChanged;
+    this.onContextStateChanged = callbacks.onContextStateChanged;
+    this.onInputStateChanged = callbacks.onInputStateChanged;
+    this.onDishStateChanged = callbacks.onDishStateChanged;
+    this.onCollectingProgress = callbacks.onCollectingProgress;
   }
 
   updateTopology(blocks: Block[], connections: Connection[]) {
     this.blocks = blocks;
     this.connections = connections;
+    
+    // Rebuild block cache for O(1) lookups
+    this.blockMap.clear();
+    for (const block of blocks) {
+      this.blockMap.set(block.id, block);
+    }
     
     const chefBlocks = blocks.filter(b => b.type === 'chef');
     
@@ -142,7 +165,7 @@ export class ExecutionEngine {
     for (const conn of this.connections) {
       // Context connections: Context → Agent (context files connect TO agent)
       if (conn.toId === agentId) {
-        const fromBlock = this.blocks.find(b => b.id === conn.fromId);
+        const fromBlock = this.getBlock(conn.fromId);
         if (fromBlock?.type === 'context_file') {
           contextIds.add(conn.fromId);
         }
@@ -156,7 +179,7 @@ export class ExecutionEngine {
     // Check if agent has any incoming connection from input_file or another chef
     for (const conn of this.connections) {
       if (conn.toId === agentId) {
-        const fromBlock = this.blocks.find(b => b.id === conn.fromId);
+        const fromBlock = this.getBlock(conn.fromId);
         if (fromBlock?.type === 'input_file' || fromBlock?.type === 'chef') {
           return true;
         }
@@ -184,20 +207,53 @@ export class ExecutionEngine {
 
   // ============ Control ============
 
+  // Enter ready mode (simulation mode but not auto-triggering)
+  enterReady() {
+    this.isRunning = false;
+    this.isPaused = false;
+    this.packets.clear();
+    
+    // Reset all agents to idle
+    for (const [id] of this.agents) {
+      this.agents.set(id, this.createAgentState(id));
+    }
+  }
+
+  // Start with auto-trigger (play from ready state)
   start() {
     this.isRunning = true;
+    this.isPaused = false;
     this.lastUpdate = Date.now();
     
     // Send initial triggers after short delay
     setTimeout(() => {
-      if (this.isRunning) {
+      if (this.isRunning && !this.isPaused) {
         this.sendInitialTriggers();
       }
     }, 500);
   }
 
+  // Start without auto-trigger (for manual input triggering)
+  startWithoutAutoTrigger() {
+    this.isRunning = true;
+    this.isPaused = false;
+    this.lastUpdate = Date.now();
+  }
+
+  // Pause (freeze packets in place)
+  pause() {
+    this.isPaused = true;
+  }
+
+  // Resume from pause
+  resume() {
+    this.isPaused = false;
+    this.lastUpdate = Date.now(); // Reset delta to avoid time jump
+  }
+
   stop() {
     this.isRunning = false;
+    this.isPaused = false;
     this.packets.clear();
     
     for (const [id] of this.agents) {
@@ -205,14 +261,42 @@ export class ExecutionEngine {
     }
   }
 
+  // Manually trigger a specific input_file block
+  triggerInputBlock(blockId: string) {
+    const block = this.getBlock(blockId);
+    if (!block || block.type !== 'input_file') {
+      console.warn(`[Engine] Block ${blockId} not found or not input_file`);
+      return;
+    }
+
+    const outConnections = this.connections.filter(c => c.fromId === blockId);
+    
+    // Visual feedback: input file sending
+    this.onInputStateChanged?.(blockId, 'sending');
+    
+    for (const conn of outConnections) {
+      this.createPacket(conn.id, 'input');
+    }
+    
+    // Reset to idle after brief visual
+    setTimeout(() => {
+      this.onInputStateChanged?.(blockId, 'idle');
+    }, 500);
+  }
+
   setSpeed(speed: number) {
     this.speed = speed;
+  }
+
+  // Direct access to packets for canvas rendering (bypasses store for performance)
+  getPackets(): FlowPacket[] {
+    return Array.from(this.packets.values());
   }
 
   // ============ Main Update Loop ============
 
   update(timestamp: number): FlowPacket[] {
-    if (!this.isRunning) return [];
+    if (!this.isRunning || this.isPaused) return Array.from(this.packets.values());
 
     const dt = timestamp - this.lastUpdate;
     this.lastUpdate = timestamp;
@@ -312,7 +396,7 @@ export class ExecutionEngine {
       return;
     }
 
-    this.onPacketArrived?.(packet);
+    // Packet arrival is handled internally - no external callback needed
 
     console.log(`[Packet ${packet.type}] Arrived via connection ${connection.id.slice(0,8)}`);
 
@@ -444,7 +528,7 @@ export class ExecutionEngine {
     // Find all context connections TO this agent (Context → Agent)
     const contextConnections = this.connections.filter(c =>
       c.toId === agent.id &&
-      this.blocks.find(b => b.id === c.fromId)?.type === 'context_file'
+      this.getBlock(c.fromId)?.type === 'context_file'
     );
 
     // Clear previous state
@@ -503,13 +587,14 @@ export class ExecutionEngine {
   }
 
   private executeOutputs(agent: AgentState) {
-    const outputConnections = this.connections.filter(c =>
-      c.fromId === agent.id &&
-      this.blocks.find(b => b.id === c.toId && (b.type === 'dish' || b.type === 'chef'))
-    );
+    const outputConnections = this.connections.filter(c => {
+      if (c.fromId !== agent.id) return false;
+      const targetBlock = this.getBlock(c.toId);
+      return targetBlock?.type === 'dish' || targetBlock?.type === 'chef';
+    });
 
     for (const conn of outputConnections) {
-      const targetBlock = this.blocks.find(b => b.id === conn.toId);
+      const targetBlock = this.getBlock(conn.toId);
       const packetType = targetBlock?.type === 'chef' ? 'handoff' : 'output';
       this.createPacket(conn.id, packetType, agent.id);
     }
@@ -580,10 +665,6 @@ export class ExecutionEngine {
 
   getAllAgentStates(): AgentState[] {
     return Array.from(this.agents.values());
-  }
-
-  getPackets(): FlowPacket[] {
-    return Array.from(this.packets.values());
   }
 }
 

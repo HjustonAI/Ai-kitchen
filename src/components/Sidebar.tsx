@@ -1,6 +1,7 @@
 import React, { memo, useRef, useState } from 'react';
 import { ChefHat, Utensils, StickyNote, Trash2, RotateCcw, Download, Upload, Image as ImageIcon, Layout, Wand2, MousePointer2, BoxSelect, FileText, Keyboard, Activity, ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
 import { useExecutionStore } from '../store/useExecutionStore';
@@ -41,17 +42,18 @@ const SidebarButton = memo(({
 ));
 
 export const Sidebar: React.FC = memo(() => {
-  const addBlock = useStore((state) => state.addBlock);
-  const addGroup = useStore((state) => state.addGroup);
-  const clearBoard = useStore((state) => state.clearBoard);
-  const updateView = useStore((state) => state.updateView);
-  const layoutBoard = useStore((state) => state.layoutBoard);
-  const blocks = useStore((state) => state.blocks);
-  const connections = useStore((state) => state.connections);
-  const groups = useStore((state) => state.groups);
-  const loadState = useStore((state) => state.loadState);
-  const selectionPriority = useStore((state) => state.selectionPriority);
-  const setSelectionPriority = useStore((state) => state.setSelectionPriority);
+  // Consolidated store subscription - single subscription instead of 11
+  const { blocks, connections, groups, selectionPriority } = useStore(
+    useShallow((s) => ({
+      blocks: s.blocks,
+      connections: s.connections,
+      groups: s.groups,
+      selectionPriority: s.selectionPriority,
+    }))
+  );
+  
+  // Actions accessed via getState() - no subscription needed
+  const { addBlock, addGroup, clearBoard, updateView, layoutBoard, loadState, setSelectionPriority } = useStore.getState();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
